@@ -1,0 +1,13 @@
+# 環境ごとの設定ファイル（コミットしない）
+config.php
+
+# アップロード画像（個別環境のデータ）
+uploads/*
+!uploads/.gitkeep
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
