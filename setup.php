@@ -15,8 +15,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') { // $_SERVER=サーバー情報の�
     // 簡易バリデーション
     if ($username === '' || $password === '') {
         $message = 'エラー：ユーザー名とパスワードは必須です。';
-    } elseif (strlen($password) < 8) { // [組み込み] strlen()=文字列の長さを返す
+    } elseif (strlen($password) < 8) {
         $message = 'エラー：パスワードは8文字以上にしてください。';
+    } elseif (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+        $message = 'エラー：パスワードには英字と数字を両方含めてください。';
     } else {
         $pdo = db(); // [自作] config.phpのDB接続関数
 
@@ -74,8 +76,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') { // $_SERVER=サーバー情報の�
         <label>ユーザー名（ログイン名）<br>
             <input type="text" name="username" required autocomplete="off">
         </label>
-        <label>パスワード（8文字以上）<br>
-            <input type="password" name="password" required autocomplete="new-password">
+        <label>パスワード（8文字以上、英字と数字を両方含む）<br>
+            <input type="password" name="password" required autocomplete="new-password" minlength="8">
         </label>
         <label>メールアドレス（任意）<br>
             <input type="email" name="email">

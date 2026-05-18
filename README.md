@@ -102,9 +102,11 @@ http://your-site/takoyaki-cms/login.php
 ```
 takoyaki-cms/
 ├── README.md
+├── CHANGELOG.md
 ├── LICENSE
 ├── config.example.php   # 設定ファイルのテンプレート
-├── schema.sql           # DBスキーマ
+├── schema.sql           # DBスキーマ（新規インストール用）
+├── migrations/          # バージョンアップ用SQL
 ├── setup.php            # 管理者初回登録（使用後に削除）
 ├── login.php            # ログイン画面
 ├── logout.php           # ログアウト処理
@@ -161,11 +163,12 @@ $posts = $stmt->fetchAll();
 
 このCMSは学習・小規模サイト向けです。本番運用は自己責任でお願いします。
 
-- **CSRF対策が未実装** — 管理画面は信頼できるネットワーク内で運用してください
 - **パスワードリセット機能なし** — 忘れた場合はDB直接更新が必要です
 - **`setup.php` は使用後必ず削除** — 残すと第三者が管理者を上書きできます
 - **画像最適化なし** — アップロード画像はそのまま保存されます（2MB上限）
 - **セキュリティ監査未実施** — 大規模・公開度の高いサイトには適しません
+
+実装済みのセキュリティ対策については [CHANGELOG.md](CHANGELOG.md) を参照してください。
 
 ---
 

@@ -14,6 +14,7 @@ $c_stmt->execute();
 $categories = $c_stmt->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
     $title       = trim($_POST['title']  ?? '');
     $body        = $_POST['body']        ?? '';
     $status      = $_POST['status']      ?? 'draft';
@@ -28,11 +29,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $thumbnail = null;
 
         if (!empty($_FILES['thumbnail']['name'])) {
-            $file    = $_FILES['thumbnail'];
-            $ext     = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            $file          = $_FILES['thumbnail'];
+            $ext           = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            $allowed_ext   = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            $allowed_mimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            $actual_mime   = mime_content_type($file['tmp_name']);
 
-            if (!in_array($ext, $allowed)) {
+            if (!in_array($ext, $allowed_ext) || !in_array($actual_mime, $allowed_mimes)) {
                 $error = '画像はjpg・png・gif・webpのみ使用できます。';
             } elseif ($file['size'] > 2 * 1024 * 1024) {
                 $error = '画像サイズは2MB以下にしてください。';
@@ -114,6 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php endif; ?>
 
     <form method="post" enctype="multipart/form-data">
+        <?= csrf_field() ?>
 
         <label>タイトル
             <input type="text" name="title" value="<?= h($_POST['title'] ?? '') ?>" required>
