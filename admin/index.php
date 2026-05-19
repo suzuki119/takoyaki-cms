@@ -37,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['delete_id'])) {
     $delete_id = (int)$_POST['delete_id'];
     $pdo->prepare('DELETE FROM posts WHERE id = :id')->execute([':id' => $delete_id]);
     log_action('post.delete', 'post', $delete_id);
+    do_action('post.delete', $delete_id);
     header('Location: ' . SITE_URL . '/admin/index.php');
     exit;
 }

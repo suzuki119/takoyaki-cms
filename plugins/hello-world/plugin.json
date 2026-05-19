@@ -1,0 +1,5 @@
+{
+    "name": "Hello World",
+    "description": "サンプルプラグイン: ショートコード [hello name=\"...\"] と本文末尾のフッターを追加します。",
+    "version": "1.0.0"
+}

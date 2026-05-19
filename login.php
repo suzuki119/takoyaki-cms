@@ -56,6 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare('DELETE FROM login_attempts WHERE ip_address = :ip')
                 ->execute([':ip' => $ip]);
 
+            do_action('login.success', ['id' => (int)$user['id'], 'username' => $user['username'], 'role' => $user['role']]);
+
             header('Location: ' . SITE_URL . '/admin/index.php');
             exit;
         }

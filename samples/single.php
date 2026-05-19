@@ -41,7 +41,7 @@ $categories = get_post_categories((int)$post['id']);
 <body>
 
 <article>
-    <h1><?= h($post['title']) ?></h1>
+    <h1><?= h(apply_filters('the_title', $post['title'], $post)) ?></h1>
 
     <p class="meta">
         <?= h($post['published_at'] ?? $post['created_at']) ?>
@@ -63,7 +63,13 @@ $categories = get_post_categories((int)$post['id']);
     <?php endif; ?>
 
     <div class="body">
-        <?= $post['body'] ?? '' ?>
+        <?php
+            // プラグインによる本文加工チェーン + ショートコード展開
+            $body = $post['body'] ?? '';
+            $body = apply_filters('the_content', $body, $post);
+            $body = do_shortcodes($body);
+            echo $body;
+        ?>
     </div>
 </article>
 

@@ -7,6 +7,43 @@
 
 ---
 
+## [1.8.0] - 2026-05-20
+
+### Added
+- **アクション/フィルターフック** — WordPress風の拡張ポイント
+  - `add_action($action, $callback, $priority)` / `do_action($action, ...$args)`
+  - `add_filter($filter, $callback, $priority)` / `apply_filters($filter, $value, ...$args)`
+  - 発火点: `post.save`, `post.delete`, `login.success`
+- **ショートコード** — 本文中のタグを動的展開
+  - `add_shortcode($tag, $callback)` / `do_shortcodes($content)`
+  - `[tag attr="value"]` 形式に対応
+- **プラグイン機構** — `plugins/` ディレクトリの動的読み込み
+  - `plugins/<name>/index.php` を有効化済みのものだけ自動require
+  - メタデータは `plugin.json`
+  - `get_enabled_plugins()` / `scan_plugins()` / `load_plugins()` ヘルパー
+- **`admin/plugins.php`**（admin限定）— プラグイン一覧・有効/無効をチェックボックスで切替
+- **サンプルプラグイン `plugins/hello-world/`** — ショートコード・フィルター・アクションを全種類使う実例
+- `plugins/README.md` — プラグイン開発ガイド
+- `samples/single.php` を `apply_filters('the_content')` / `apply_filters('the_title')` / `do_shortcodes()` 利用例に更新
+
+### Changed
+- 管理画面ナビ（admin限定）に「プラグイン」を追加
+
+### Known limitations (v1.8.0時点で見送り)
+- **テーマ機構** — `samples/` で代替済み。テーマ切替UIは URLルーティング前提で embeddable 設計と相性が悪いため見送り
+
+### Upgrade Guide
+
+```bash
+git pull
+```
+
+DBスキーマ変更はありません。
+`plugins/` ディレクトリは新規追加されますが、デフォルトでは何も有効化されていません。
+管理画面の「プラグイン」メニューで有効化できます。
+
+---
+
 ## [1.7.0] - 2026-05-20
 
 ### Added
