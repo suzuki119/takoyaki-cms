@@ -33,16 +33,21 @@ CREATE TABLE IF NOT EXISTS categories (
 -- posts : 記事
 -- ===================================================
 CREATE TABLE IF NOT EXISTS posts (
-    id         INT AUTO_INCREMENT PRIMARY KEY,
-    title      VARCHAR(255) NOT NULL,
-    body       LONGTEXT     DEFAULT NULL,
-    thumbnail  VARCHAR(255) DEFAULT NULL,
-    status     ENUM('draft','published') NOT NULL DEFAULT 'draft',
-    author_id  INT          DEFAULT NULL,
-    sort_order INT          NOT NULL DEFAULT 0,
-    created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    title        VARCHAR(255) NOT NULL,
+    slug         VARCHAR(200) DEFAULT NULL,
+    body         LONGTEXT     DEFAULT NULL,
+    excerpt      VARCHAR(500) DEFAULT NULL,
+    thumbnail    VARCHAR(255) DEFAULT NULL,
+    status       ENUM('draft','published') NOT NULL DEFAULT 'draft',
+    published_at TIMESTAMP    NULL DEFAULT NULL,
+    author_id    INT          DEFAULT NULL,
+    sort_order   INT          NOT NULL DEFAULT 0,
+    created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_slug (slug),
     INDEX idx_status (status),
+    INDEX idx_published_at (published_at),
     INDEX idx_sort_order (sort_order),
     CONSTRAINT fk_posts_author
         FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL

@@ -59,7 +59,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['move_id'])) {
 // ===================================================
 //  記事一覧を取得
 // ===================================================
-$stmt = $pdo->prepare('SELECT * FROM posts ORDER BY sort_order ASC');
+$stmt = $pdo->prepare(
+    "SELECT *,
+            (status = 'published' AND (published_at IS NULL OR published_at <= NOW())) AS is_live
+     FROM posts
+     ORDER BY sort_order ASC"
+);
 $stmt->execute();
 $posts = $stmt->fetchAll();
 ?>
@@ -79,6 +84,9 @@ $posts = $stmt->fetchAll();
         th { background: #f5f5f5; }
         .status-published { color: #27ae60; font-weight: bold; }
         .status-draft { color: #999; }
+        .status-scheduled { color: #e67e22; font-weight: bold; }
+        .status-detail { display: block; font-size: .75rem; color: #888; margin-top: 2px; font-weight: normal; }
+        .preview-link { font-size: .8rem; }
         .actions form { display: inline; }
         .actions a { margin-right: 8px; color: #333; font-size: .85rem; }
         .actions button { background: none; border: none; color: #c0392b; cursor: pointer; font-size: .85rem; }
@@ -134,14 +142,18 @@ $posts = $stmt->fetchAll();
                     </td>
                     <td><?= h($post['title']) ?></td>
                     <td>
-                        <?php if ($post['status'] === 'published'): ?>
-                            <span class="status-published">公開</span>
+                        <?php if ($post['status'] === 'published' && $post['is_live']): ?>
+                            <span class="status-published">公開中</span>
+                        <?php elseif ($post['status'] === 'published' && !$post['is_live']): ?>
+                            <span class="status-scheduled">予約公開</span>
+                            <span class="status-detail"><?= h($post['published_at']) ?></span>
                         <?php else: ?>
                             <span class="status-draft">下書き</span>
                         <?php endif; ?>
                     </td>
                     <td class="actions">
                         <a href="<?= SITE_URL ?>/admin/post-edit.php?id=<?= h($post['id']) ?>">編集</a>
+                        <a class="preview-link" href="<?= SITE_URL ?>/preview.php?id=<?= h($post['id']) ?>" target="_blank">プレビュー</a>
                         <form method="post" onsubmit="return confirm('削除しますか？');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="delete_id" value="<?= h($post['id']) ?>">

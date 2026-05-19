@@ -40,11 +40,31 @@ $currentCategoryId = $post_category_id ? $post_category_id['category_id'] : null
 // ===================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
-    $title       = trim($_POST['title'] ?? '');
-    $body        = $_POST['body']       ?? '';
-    $status      = $_POST['status']     ?? 'draft';
-    $thumbnail   = $post['thumbnail'];
-    $category_id = $_POST['category_id'] ?? '';
+    $title           = trim($_POST['title']        ?? '');
+    $slug_input      = trim($_POST['slug']         ?? '');
+    $body            = $_POST['body']              ?? '';
+    $excerpt         = trim($_POST['excerpt']      ?? '');
+    $status          = $_POST['status']            ?? 'draft';
+    $published_at_in = trim($_POST['published_at'] ?? '');
+    $thumbnail       = $post['thumbnail'];
+    $category_id     = $_POST['category_id']       ?? '';
+
+    // slug: 入力があれば sluggify、なければタイトルから自動生成
+    $slug = sluggify($slug_input !== '' ? $slug_input : $title);
+    $slug = $slug === '' ? null : $slug;
+
+    // published_at:
+    // - status='draft' → NULL
+    // - status='published' & 入力あり → 入力値を採用
+    // - status='published' & 入力なし → 既存値があれば維持、なければ現在時刻
+    $published_at = null;
+    if ($status === 'published') {
+        if ($published_at_in !== '') {
+            $published_at = str_replace('T', ' ', $published_at_in) . ':00';
+        } else {
+            $published_at = $post['published_at'] ?? date('Y-m-d H:i:s');
+        }
+    }
 
     if ($title === '') {
         $error = 'タイトルは必須です。';
@@ -86,19 +106,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($error === '') {
-            // posts テーブルを更新
-            $stmt = $pdo->prepare(
-                'UPDATE posts SET
-                    title = :title, body = :body, thumbnail = :thumbnail, status = :status
-                 WHERE id = :id'
-            );
-            $stmt->execute([
-                ':title'     => $title,
-                ':body'      => $body,
-                ':thumbnail' => $thumbnail,
-                ':status'    => $status,
-                ':id'        => $id,
-            ]);
+            try {
+                $stmt = $pdo->prepare(
+                    'UPDATE posts SET
+                        title = :title, slug = :slug, body = :body, excerpt = :excerpt,
+                        thumbnail = :thumbnail, status = :status, published_at = :published_at
+                     WHERE id = :id'
+                );
+                $stmt->execute([
+                    ':title'        => $title,
+                    ':slug'         => $slug,
+                    ':body'         => $body,
+                    ':excerpt'      => $excerpt !== '' ? $excerpt : null,
+                    ':thumbnail'    => $thumbnail,
+                    ':status'       => $status,
+                    ':published_at' => $published_at,
+                    ':id'           => $id,
+                ]);
+            } catch (PDOException $e) {
+                $error = '記事の保存に失敗しました（slug が既存と重複している可能性があります）。';
+            }
+        }
+
+        if ($error === '') {
 
             // カテゴリの紐付けを更新（全削除 → 入れ直し）
             $pc_stmt = $pdo->prepare('DELETE FROM post_categories WHERE post_id = :post_id');
@@ -115,9 +145,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // エラー時：フォームの入力値を保持する
-    $post['title']  = $title;
-    $post['body']   = $body;
-    $post['status'] = $status;
+    $post['title']        = $title;
+    $post['slug']         = $slug_input;
+    $post['body']         = $body;
+    $post['excerpt']      = $excerpt;
+    $post['status']       = $status;
+    $post['published_at'] = $published_at_in !== '' ? $published_at_in : ($post['published_at'] ?? '');
 }
 ?>
 <!DOCTYPE html>
@@ -144,6 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         button[type="submit"] { padding: 10px 24px; background: #222; color: #fff; border: none; cursor: pointer; font-size: 1rem; }
         a.back { font-size: .9rem; color: #666; }
         .error { margin-top: 16px; padding: 10px; background: #fdecea; border-left: 4px solid #c0392b; font-size: .9rem; }
+        .hint { font-size: .8rem; color: #666; margin-top: 4px; font-weight: normal; }
         .meta { margin-top: 8px; font-size: .8rem; color: #999; }
         .thumbnail-preview img { max-width: 200px; margin-top: 8px; display: block; }
         .thumbnail-preview label { font-weight: normal; font-size: .85rem; color: #c0392b; margin-top: 6px; }
@@ -165,9 +199,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <input type="text" name="title" value="<?= h($post['title']) ?>" required>
         </label>
 
+        <label>slug（URL用識別子、任意）
+            <input type="text" name="slug" value="<?= h($post['slug'] ?? '') ?>" placeholder="例: my-first-post">
+            <p class="hint">空欄の場合はタイトルから自動生成。英数字とハイフンのみ。</p>
+        </label>
+
         <label>本文
             <!-- [重要] WYSIWYGエディタの内容はHTMLのまま保存するため、h()でエスケープせずそのまま出力する -->
             <textarea name="body" class="wysiwyg"><?= $post['body'] ?? '' ?></textarea>
+        </label>
+
+        <label>抜粋（任意、最大500文字）
+            <textarea name="excerpt" maxlength="500" style="height: 80px;"><?= h($post['excerpt'] ?? '') ?></textarea>
+            <p class="hint">一覧ページで表示する短い説明文。</p>
         </label>
 
         <label>サムネイル画像
@@ -188,6 +232,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <option value="draft"     <?= $post['status'] === 'draft'     ? 'selected' : '' ?>>下書き</option>
                 <option value="published" <?= $post['status'] === 'published' ? 'selected' : '' ?>>公開</option>
             </select>
+        </label>
+
+        <?php
+            // datetime-local の value は "YYYY-MM-DDTHH:MM" 形式
+            $pub_val = '';
+            if (!empty($post['published_at'])) {
+                // 既にHTML形式（POSTエラー時）か MySQL形式（DB由来）かを正規化
+                $pub_val = str_replace(' ', 'T', substr($post['published_at'], 0, 16));
+            }
+        ?>
+        <label>公開日時
+            <input type="datetime-local" name="published_at" value="<?= h($pub_val) ?>">
+            <p class="hint">「公開」ステータスのときに有効。未来日付なら予約公開、空欄なら保存時刻を使用。</p>
         </label>
 
         <label>カテゴリー
