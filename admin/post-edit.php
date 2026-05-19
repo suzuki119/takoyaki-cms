@@ -129,6 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             log_action('post.update', 'post', $id, 'タイトル: ' . $title);
+            do_action('post.save', ['id' => $id, 'title' => $title, 'is_new' => false]);
             header('Location: ' . SITE_URL . '/admin/index.php');
             exit;
         }

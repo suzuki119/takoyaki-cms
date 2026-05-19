@@ -467,6 +467,164 @@ function log_action(string $action, ?string $target_type = null, ?int $target_id
     }
 }
 
+// ===================================================
+//  フック / フィルター / ショートコード
+//  WordPress 風の拡張ポイント。プラグインで使う。
+// ===================================================
+
+/**
+ * アクションフックにコールバックを登録する。
+ * @param string   $action   フック名（例: 'post.save'）
+ * @param callable $callback フック発火時に呼ばれる関数
+ * @param int      $priority 小さいほど先に呼ばれる
+ */
+function add_action(string $action, callable $callback, int $priority = 10): void
+{
+    $GLOBALS['_takoyaki_actions'][$action][] = ['cb' => $callback, 'p' => $priority];
+}
+
+/**
+ * アクションフックを発火する。登録された全コールバックを priority 順に呼び出す。
+ * @param string $action フック名
+ * @param mixed  ...$args コールバックに渡す追加引数
+ */
+function do_action(string $action, ...$args): void
+{
+    $list = $GLOBALS['_takoyaki_actions'][$action] ?? [];
+    if (empty($list)) return;
+
+    usort($list, fn($a, $b) => $a['p'] <=> $b['p']);
+    foreach ($list as $entry) {
+        call_user_func_array($entry['cb'], $args);
+    }
+}
+
+/**
+ * フィルターフックにコールバックを登録する。
+ * コールバックは値を受け取り、加工した値を返す（チェーン可能）。
+ */
+function add_filter(string $filter, callable $callback, int $priority = 10): void
+{
+    $GLOBALS['_takoyaki_filters'][$filter][] = ['cb' => $callback, 'p' => $priority];
+}
+
+/**
+ * フィルターチェーンを適用する。
+ * @param string $filter フィルター名
+ * @param mixed  $value  初期値
+ * @return mixed 全コールバック適用後の値
+ */
+function apply_filters(string $filter, $value, ...$args)
+{
+    $list = $GLOBALS['_takoyaki_filters'][$filter] ?? [];
+    if (empty($list)) return $value;
+
+    usort($list, fn($a, $b) => $a['p'] <=> $b['p']);
+    foreach ($list as $entry) {
+        $value = call_user_func_array($entry['cb'], [$value, ...$args]);
+    }
+    return $value;
+}
+
+/**
+ * ショートコードを登録する。
+ * コールバックは $attrs（属性連想配列）を受け取り、置き換える文字列を返す。
+ *
+ *   add_shortcode('today', fn($attrs) => date('Y-m-d'));
+ *   // 本文中の [today] が「2026-05-20」に展開される
+ */
+function add_shortcode(string $tag, callable $callback): void
+{
+    $GLOBALS['_takoyaki_shortcodes'][$tag] = $callback;
+}
+
+/**
+ * 文字列中のショートコード [tag attr="val"] をすべて解析・置き換えて返す。
+ */
+function do_shortcodes(string $content): string
+{
+    $shortcodes = $GLOBALS['_takoyaki_shortcodes'] ?? [];
+    if (empty($shortcodes)) return $content;
+
+    $tag_alt = implode('|', array_map(fn($t) => preg_quote($t, '/'), array_keys($shortcodes)));
+    $pattern = '/\[(' . $tag_alt . ')((?:\s+\w+="[^"]*")*)\s*\/?\]/';
+
+    return preg_replace_callback($pattern, function ($m) use ($shortcodes) {
+        $tag   = $m[1];
+        $attrs = [];
+        if (!empty($m[2])) {
+            preg_match_all('/(\w+)="([^"]*)"/', $m[2], $attr_matches, PREG_SET_ORDER);
+            foreach ($attr_matches as $am) {
+                $attrs[$am[1]] = $am[2];
+            }
+        }
+        return (string) call_user_func($shortcodes[$tag], $attrs);
+    }, $content);
+}
+
+// ===================================================
+//  プラグインローダー
+//  plugins/ ディレクトリ配下の有効化済みプラグインを読み込む。
+// ===================================================
+
+/**
+ * 有効化済みプラグインの名前一覧を返す。
+ * site_settings.enabled_plugins に JSON 配列で保存されている。
+ */
+function get_enabled_plugins(): array
+{
+    $raw = get_setting('enabled_plugins', '[]');
+    $list = json_decode($raw ?? '[]', true);
+    return is_array($list) ? $list : [];
+}
+
+/**
+ * インストール済みのプラグイン一覧を返す（plugins/ ディレクトリのスキャン）。
+ * 各プラグインは plugins/<name>/index.php と plugins/<name>/plugin.json を持つ。
+ */
+function scan_plugins(): array
+{
+    $dir = __DIR__ . '/plugins';
+    if (!is_dir($dir)) return [];
+
+    $plugins = [];
+    foreach (scandir($dir) as $name) {
+        if ($name === '.' || $name === '..') continue;
+        $path = $dir . '/' . $name;
+        if (!is_dir($path)) continue;
+        if (!file_exists($path . '/index.php')) continue;
+
+        $meta = ['name' => $name, 'description' => '', 'version' => ''];
+        if (file_exists($path . '/plugin.json')) {
+            $json = json_decode((string)file_get_contents($path . '/plugin.json'), true);
+            if (is_array($json)) {
+                $meta = array_merge($meta, array_intersect_key($json, $meta));
+            }
+        }
+        $plugins[] = $meta;
+    }
+    return $plugins;
+}
+
+/**
+ * 有効化済みのプラグインを読み込む。
+ * config.php の最後で呼ぶ。
+ */
+function load_plugins(): void
+{
+    $enabled = get_enabled_plugins();
+    foreach ($enabled as $name) {
+        if (!preg_match('/^[A-Za-z0-9_-]+$/', $name)) continue;  // 安全な名前のみ
+        $entry = __DIR__ . '/plugins/' . $name . '/index.php';
+        if (file_exists($entry)) {
+            require_once $entry;
+        }
+    }
+}
+
+// プラグインを読み込む（テーブルが無い場合 get_setting が null を返すので安全）
+load_plugins();
+
 /**
  * CSRFトークンを取得（セッションごとに一意、初回呼び出し時に生成）
  */

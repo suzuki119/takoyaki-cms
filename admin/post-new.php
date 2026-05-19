@@ -98,6 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             log_action('post.create', 'post', (int)$newPostId, 'タイトル: ' . $title);
+            do_action('post.save', ['id' => (int)$newPostId, 'title' => $title, 'is_new' => true]);
             header('Location: ' . SITE_URL . '/admin/index.php');
             exit;
         }
