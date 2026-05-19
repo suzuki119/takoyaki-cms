@@ -7,6 +7,39 @@
 
 ---
 
+## [1.5.0] - 2026-05-19
+
+### Added
+- **フロントエンド向けヘルパー関数** を `config.php` に追加:
+  - `get_posts(array $opts)` — 公開中の記事一覧。カテゴリ絞り込み、並び順、limit/offset、`include_drafts` をサポート
+  - `get_post($id_or_slug, bool $include_drafts = false)` — 1件の記事を ID または slug で取得
+  - `get_categories()` — 全カテゴリ
+  - `get_category($id_or_slug)` — 1件のカテゴリを ID または slug で取得
+  - `get_post_categories(int $post_id)` — 記事に紐付くカテゴリ
+  - `post_thumb_url(?string $filename)` — サムネイル変種URL（無ければ元画像URL）
+- **`samples/` サンプルテンプレート** — そのまま動作する公開ページの実装例:
+  - `samples/index.php` — 最新10件の記事一覧
+  - `samples/single.php` — 記事詳細（`?id=N` または `?slug=...`）
+  - `samples/category.php` — カテゴリ別一覧
+  - `samples/README.md` — 使い方ドキュメント
+- **`feed.php`** — RSS 2.0 形式のフィード（最新50件）。Content-Type: `application/rss+xml`
+- **`sitemap.php`** — XMLサイトマップ。検索エンジン登録用
+
+### Known limitations (v1.5.0時点で見送り)
+- **URLルーティング（`.htaccess` 含む）** — CMSが「embeddable」設計で、利用者のサイトURL構造に依存するため見送り。サンプルの `?id=N` / `?slug=...` パターンを採用
+
+### Upgrade Guide
+
+```bash
+git pull
+```
+
+DBスキーマ変更はありません。
+新規ファイル（`samples/`, `feed.php`, `sitemap.php`）は任意で利用してください。
+`feed.php` / `sitemap.php` の冒頭にある `$post_url` コールバックを自分のサイトのURL構造に合わせて編集することを推奨します。
+
+---
+
 ## [1.4.0] - 2026-05-19
 
 ### Added

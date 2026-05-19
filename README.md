@@ -14,7 +14,9 @@ PHP + MySQL で動作する、シンプルな自作CMSです。
 - 記事の作成・編集・削除、サムネイル画像、CKEditor 5 によるリッチテキスト編集
 - 記事の slug / 抜粋 / 予約公開 / プレビュー
 - カテゴリ管理、記事との多対多紐付け
+- 画像の自動リサイズ・サムネイル変種生成、メディアライブラリ
 - 複数管理者（admin / editor ロール）、CSRF対策、ログイン試行回数制限
+- フロントエンド向けヘルパー関数 + サンプルテンプレート、RSS / sitemap.xml
 - 並び替え（↑↓ボタンで `sort_order` 入れ替え）
 
 ---
@@ -112,15 +114,22 @@ takoyaki-cms/
 ├── login.php            # ログイン画面
 ├── logout.php           # ログアウト処理
 ├── preview.php          # 記事プレビュー（ログイン必須）
+├── feed.php             # RSS 2.0 フィード
+├── sitemap.php          # sitemap.xml
 ├── admin/
 │   ├── index.php        # 記事一覧
 │   ├── post-new.php     # 記事新規作成
 │   ├── post-edit.php    # 記事編集
 │   ├── categories.php   # カテゴリ管理
+│   ├── media.php        # メディアライブラリ（admin限定）
 │   ├── users.php        # ユーザー管理（admin限定）
 │   ├── user-edit.php    # ユーザー編集（admin限定）
 │   ├── account.php      # 自分のアカウント設定
 │   └── upload-image.php # 本文画像アップロード（CKEditor連携）
+├── samples/             # 公開ページのサンプルテンプレート
+│   ├── index.php        # 記事一覧
+│   ├── single.php       # 記事詳細
+│   └── category.php     # カテゴリ別一覧
 └── uploads/             # 画像保存先（要書き込み権限）
 ```
 
@@ -142,37 +151,54 @@ takoyaki-cms/
 
 ## フロントエンドについて
 
-本CMSは **管理画面のみ** を提供します。記事を表示する公開ページは含まれていません。
-利用者が自分のサイトに合わせて自由にデザイン・実装してください。
+本CMSは **管理画面 + フロントエンド向けヘルパー** を提供します。実際の見た目は利用者が自由にデザイン・実装する設計です。
 
-DBから公開中の記事を取得する例：
+### サンプルテンプレート
+
+`samples/` ディレクトリにそのまま動くサンプルがあります（コピー・改変してご利用ください）。
+
+| ファイル | 役割 |
+|---------|------|
+| `samples/index.php` | 記事一覧（最新10件） |
+| `samples/single.php` | 記事詳細（`?id=1` or `?slug=my-post`） |
+| `samples/category.php` | カテゴリ別一覧（`?id=1` or `?slug=blog`） |
+
+詳しくは [samples/README.md](samples/README.md) を参照してください。
+
+### ヘルパー関数
+
+`config.php` を読み込むと次のヘルパーが使えます（公開中の記事のみが返ります）。
 
 ```php
-<?php
 require_once 'config.php';
-$pdo = db();
 
-// status='published' かつ published_at が現在以前（または未設定）の記事だけ取得
-// → 予約投稿は自動的に時刻が来るまで非表示になる
-$stmt = $pdo->prepare(
-    "SELECT * FROM posts
-      WHERE status = 'published'
-        AND (published_at IS NULL OR published_at <= NOW())
-      ORDER BY sort_order ASC"
-);
-$stmt->execute();
-$posts = $stmt->fetchAll();
-?>
-<?php foreach ($posts as $post): ?>
-    <article>
-        <h2><?= h($post['title']) ?></h2>
-        <?php if (!empty($post['excerpt'])): ?>
-            <p><?= h($post['excerpt']) ?></p>
-        <?php endif; ?>
-        <?= $post['body'] ?>
-    </article>
-<?php endforeach; ?>
+// 公開中の記事を取得（最新10件）
+$posts = get_posts([
+    'limit'    => 10,
+    'order_by' => 'published_at',
+    'order'    => 'DESC',
+]);
+
+// 1件の記事を ID or slug で取得
+$post = get_post(1);          // ID
+$post = get_post('my-post');  // slug
+
+// カテゴリ一覧、特定の記事に紐付くカテゴリ
+$categories      = get_categories();
+$post_categories = get_post_categories($post['id']);
+
+// サムネイルURL（thumb 変種があればそれ、なければ元画像）
+$url = post_thumb_url($post['thumbnail']);
 ```
+
+予約投稿は時刻が来るまで自動的に除外されます。
+
+### RSS フィード / サイトマップ
+
+- `feed.php` — RSS 2.0 形式で最新50件
+- `sitemap.php` — 検索エンジン向けXMLサイトマップ
+
+どちらも記事URLを利用者のサイトに合わせて変更する想定です（ファイル先頭のコールバックを編集）。
 
 ---
 
