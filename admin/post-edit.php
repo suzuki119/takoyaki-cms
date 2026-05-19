@@ -81,15 +81,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (!in_array($ext, $allowed_ext) || !in_array($actual_mime, $allowed_mimes)) {
                 $error = '画像はjpg・png・gif・webpのみ使用できます。';
-            } elseif ($file['size'] > 2 * 1024 * 1024) {
-                $error = '画像サイズは2MB以下にしてください。';
+            } elseif ($file['size'] > MAX_UPLOAD_SIZE) {
+                $error = '画像サイズは ' . (int)(MAX_UPLOAD_SIZE / 1024 / 1024) . 'MB 以下にしてください。';
             } else {
                 $filename = uniqid() . '.' . $ext;
                 $savePath = UPLOAD_DIR . $filename;
 
                 if (move_uploaded_file($file['tmp_name'], $savePath)) {
-                    if ($post['thumbnail'] && file_exists(UPLOAD_DIR . $post['thumbnail'])) {
-                        unlink(UPLOAD_DIR . $post['thumbnail']);
+                    // 新しい画像をリサイズ
+                    resize_image($savePath, IMAGE_MAX_WIDTH, $savePath);
+                    resize_image($savePath, IMAGE_THUMB_WIDTH, UPLOAD_DIR . thumb_filename($filename));
+
+                    // 古い画像とその thumb 変種を削除
+                    if ($post['thumbnail']) {
+                        @unlink(UPLOAD_DIR . $post['thumbnail']);
+                        @unlink(UPLOAD_DIR . thumb_filename($post['thumbnail']));
                     }
                     $thumbnail = $filename;
                 } else {
@@ -99,9 +105,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!empty($_POST['delete_thumbnail']) && $post['thumbnail']) {
-            if (file_exists(UPLOAD_DIR . $post['thumbnail'])) {
-                unlink(UPLOAD_DIR . $post['thumbnail']);
-            }
+            @unlink(UPLOAD_DIR . $post['thumbnail']);
+            @unlink(UPLOAD_DIR . thumb_filename($post['thumbnail']));
             $thumbnail = null;
         }
 

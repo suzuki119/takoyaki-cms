@@ -33,16 +33,21 @@ if (!in_array($ext, $allowed_ext) || !in_array($actual_mime, $allowed_mimes)) {
     exit;
 }
 
-if ($file['size'] > 2 * 1024 * 1024) {
-    echo json_encode(['error' => ['message' => '画像サイズは2MB以下にしてください']]);
+if ($file['size'] > MAX_UPLOAD_SIZE) {
+    $mb = (int)(MAX_UPLOAD_SIZE / 1024 / 1024);
+    echo json_encode(['error' => ['message' => '画像サイズは' . $mb . 'MB以下にしてください']]);
     exit;
 }
 
 $filename = uniqid() . '.' . $ext;
+$savePath = UPLOAD_DIR . $filename;
 
-if (!move_uploaded_file($file['tmp_name'], UPLOAD_DIR . $filename)) {
+if (!move_uploaded_file($file['tmp_name'], $savePath)) {
     echo json_encode(['error' => ['message' => '保存に失敗しました']]);
     exit;
 }
+
+// 本文内画像もリサイズ（thumb 変種は生成しない）
+resize_image($savePath, IMAGE_MAX_WIDTH, $savePath);
 
 echo json_encode(['url' => UPLOAD_URL . $filename]);
