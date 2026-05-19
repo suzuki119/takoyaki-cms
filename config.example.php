@@ -234,6 +234,166 @@ function thumb_filename(string $filename): string
     return $base . '-thumb.' . $ext;
 }
 
+// ===================================================
+//  フロントエンド用 記事取得ヘルパー
+//  公開ページ（テーマ）から呼び出す想定のヘルパー関数群。
+//  既定では公開中の記事のみを返す（status='published' かつ
+//  published_at <= NOW()）。下書きを含めたい場合は include_drafts オプション。
+// ===================================================
+
+/**
+ * 公開中の記事を取得する。
+ *
+ * @param array $opts {
+ *     limit         (int)    最大件数（省略時は全件）
+ *     offset        (int)    オフセット
+ *     category_id   (int)    特定カテゴリで絞り込み
+ *     order_by      (string) 並び順カラム（既定 'sort_order'）
+ *     order         (string) 'ASC' or 'DESC'（既定 'ASC'）
+ *     include_drafts (bool)  下書き・予約も含めるか（既定 false）
+ * }
+ * @return array
+ */
+function get_posts(array $opts = []): array
+{
+    $opts += [
+        'limit'          => null,
+        'offset'         => 0,
+        'category_id'    => null,
+        'order_by'       => 'sort_order',
+        'order'          => 'ASC',
+        'include_drafts' => false,
+    ];
+
+    // ORDER BY 句の値は識別子なのでホワイトリスト検証
+    $allowed_columns = ['sort_order', 'created_at', 'published_at', 'updated_at', 'id', 'title'];
+    $order_by        = in_array($opts['order_by'], $allowed_columns, true) ? $opts['order_by'] : 'sort_order';
+    $order           = strtoupper($opts['order']) === 'DESC' ? 'DESC' : 'ASC';
+
+    $where  = [];
+    $params = [];
+
+    if (!$opts['include_drafts']) {
+        $where[] = "p.status = 'published'";
+        $where[] = "(p.published_at IS NULL OR p.published_at <= NOW())";
+    }
+
+    $join = '';
+    if (!empty($opts['category_id'])) {
+        $join             = 'INNER JOIN post_categories pc ON pc.post_id = p.id';
+        $where[]          = 'pc.category_id = :category_id';
+        $params[':category_id'] = (int)$opts['category_id'];
+    }
+
+    $sql  = "SELECT p.* FROM posts p $join";
+    if (!empty($where)) {
+        $sql .= ' WHERE ' . implode(' AND ', $where);
+    }
+    $sql .= " ORDER BY p.$order_by $order";
+
+    if ($opts['limit'] !== null) {
+        $sql .= ' LIMIT :limit OFFSET :offset';
+    }
+
+    $stmt = db()->prepare($sql);
+    foreach ($params as $k => $v) {
+        $stmt->bindValue($k, $v, PDO::PARAM_INT);
+    }
+    if ($opts['limit'] !== null) {
+        $stmt->bindValue(':limit', (int)$opts['limit'], PDO::PARAM_INT);
+        $stmt->bindValue(':offset', (int)$opts['offset'], PDO::PARAM_INT);
+    }
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
+/**
+ * 1件の記事を取得。
+ *
+ * @param int|string $id_or_slug   数値ならID、文字列ならslug
+ * @param bool       $include_drafts 下書き・予約も含めるか
+ * @return array|null 見つからなければ null
+ */
+function get_post($id_or_slug, bool $include_drafts = false): ?array
+{
+    if (is_numeric($id_or_slug)) {
+        $sql    = 'SELECT * FROM posts WHERE id = :v LIMIT 1';
+        $params = [':v' => (int)$id_or_slug];
+    } else {
+        $sql    = 'SELECT * FROM posts WHERE slug = :v LIMIT 1';
+        $params = [':v' => (string)$id_or_slug];
+    }
+
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+    $post = $stmt->fetch();
+
+    if (!$post) {
+        return null;
+    }
+
+    // 公開状態のチェック
+    if (!$include_drafts) {
+        $is_live = $post['status'] === 'published'
+            && (empty($post['published_at']) || strtotime($post['published_at']) <= time());
+        if (!$is_live) {
+            return null;
+        }
+    }
+
+    return $post;
+}
+
+/**
+ * 全カテゴリを取得（登録順）
+ */
+function get_categories(): array
+{
+    return db()->query('SELECT * FROM categories ORDER BY id ASC')->fetchAll();
+}
+
+/**
+ * 1件のカテゴリを取得（ID または slug）
+ */
+function get_category($id_or_slug): ?array
+{
+    if (is_numeric($id_or_slug)) {
+        $stmt = db()->prepare('SELECT * FROM categories WHERE id = :v LIMIT 1');
+        $stmt->execute([':v' => (int)$id_or_slug]);
+    } else {
+        $stmt = db()->prepare('SELECT * FROM categories WHERE slug = :v LIMIT 1');
+        $stmt->execute([':v' => (string)$id_or_slug]);
+    }
+    return $stmt->fetch() ?: null;
+}
+
+/**
+ * 特定の記事に紐付いているカテゴリを取得
+ */
+function get_post_categories(int $post_id): array
+{
+    $stmt = db()->prepare(
+        'SELECT c.* FROM categories c
+           INNER JOIN post_categories pc ON pc.category_id = c.id
+          WHERE pc.post_id = :id
+          ORDER BY c.id ASC'
+    );
+    $stmt->execute([':id' => $post_id]);
+    return $stmt->fetchAll();
+}
+
+/**
+ * 記事のサムネイル変種URLを返す（thumb 変種が存在しない場合は元画像URL）
+ */
+function post_thumb_url(?string $filename): ?string
+{
+    if (!$filename) {
+        return null;
+    }
+    $thumb = thumb_filename($filename);
+    return file_exists(UPLOAD_DIR . $thumb) ? UPLOAD_URL . $thumb : UPLOAD_URL . $filename;
+}
+
 /**
  * CSRFトークンを取得（セッションごとに一意、初回呼び出し時に生成）
  */
