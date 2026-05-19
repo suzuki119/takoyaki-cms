@@ -12,6 +12,7 @@ $error = '';
 //  追加処理
 // ===================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action'])) {
+    verify_csrf();
 
     // カテゴリ追加
     if ($_POST['action'] === 'add') {
@@ -81,6 +82,7 @@ $categories = $stmt->fetchAll(); // [PDO組み込み] 全行を配列で取得
     <?php endif; ?>
 
     <form class="add-form" method="post">
+        <?= csrf_field() ?>
         <input type="hidden" name="action" value="add">
         <input type="text" name="name" placeholder="カテゴリ名（例：JavaScript）" required>
         <button type="submit">追加</button>
@@ -102,6 +104,7 @@ $categories = $stmt->fetchAll(); // [PDO組み込み] 全行を配列で取得
                     <td><?= h($category['name']) ?></td>
                     <td>
                         <form method="post" onsubmit="return confirm('削除しますか？');">
+                            <?= csrf_field() ?>
                             <input type="hidden" name="action" value="delete">
                             <input type="hidden" name="delete_id" value="<?= h($category['id']) ?>">
                             <button class="delete-btn" type="submit">削除</button>

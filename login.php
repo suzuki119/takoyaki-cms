@@ -2,12 +2,8 @@
 // ===================================================
 //  管理者ログイン画面
 // ===================================================
-require_once 'config.php'; // [組み込み] 別ファイルを1回だけ読み込む
-
-// セッション開始
-if (session_status() === PHP_SESSION_NONE) { // [組み込み関数] セッションの状態を返す / [組み込み定数] セッション未開始
-    session_start(); // [組み込み] セッションを開始する
-}
+require_once 'config.php';
+start_session();
 
 // すでにログイン済みなら管理画面へ
 if (!empty($_SESSION['user_id'])) {
@@ -15,39 +11,59 @@ if (!empty($_SESSION['user_id'])) {
     exit;
 }
 
+// レート制限の設定：15分間に5回失敗したらブロック
+const LOGIN_MAX_ATTEMPTS    = 5;
+const LOGIN_WINDOW_MINUTES  = 15;
+
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') { // $_SERVER はサーバー情報が入るPHP組み込みの変数。REQUEST_METHODでGET/POSTを判定
-    $username = trim($_POST['username'] ?? ''); // [組み込み] trim()=前後の空白を除去 / $_POST はフォームの送信値
-    $password = $_POST['password'] ?? '';       // ?? は「左がnullなら右を使う」（null合体演算子）
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = trim($_POST['username'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $ip       = $_SERVER['REMOTE_ADDR'] ?? '';
 
-    if ($username === '' || $password === '') {
+    $pdo = db();
+
+    // 同一IPからの直近の失敗回数をカウント
+    $cnt_stmt = $pdo->prepare(
+        'SELECT COUNT(*) FROM login_attempts
+         WHERE ip_address = :ip
+           AND attempted_at >= (NOW() - INTERVAL :minutes MINUTE)'
+    );
+    $cnt_stmt->bindValue(':ip', $ip);
+    $cnt_stmt->bindValue(':minutes', LOGIN_WINDOW_MINUTES, PDO::PARAM_INT);
+    $cnt_stmt->execute();
+    $recent_failures = (int)$cnt_stmt->fetchColumn();
+
+    if ($recent_failures >= LOGIN_MAX_ATTEMPTS) {
+        $error = 'ログイン試行回数が多すぎます。' . LOGIN_WINDOW_MINUTES . '分後にもう一度お試しください。';
+    } elseif ($username === '' || $password === '') {
         $error = 'ユーザー名とパスワードを入力してください。';
     } else {
-        $pdo = db(); // [自作] config.phpのDB接続関数
+        // ユーザー名でDBを検索
+        $stmt = $pdo->prepare('SELECT * FROM users WHERE username = :username LIMIT 1');
+        $stmt->execute([':username' => $username]);
+        $user = $stmt->fetch();
 
-        // ① ユーザー名でDBを検索
-        $stmt = $pdo->prepare('SELECT * FROM users WHERE username = :username LIMIT 1'); // [PDO組み込み] SQLを準備する
-        $stmt->execute([':username' => $username]); // [PDO組み込み] SQLを実行する
-
-        $user = $stmt->fetch(); // [PDO組み込み] 結果を1行取得。見つからなければ false
-
-        // ② password_verify() でハッシュと照合
-        if ($user && password_verify($password, $user['password'])) { // [組み込み] パスワードとハッシュを照合する
+        if ($user && password_verify($password, $user['password'])) {
             // ログイン成功
-
-            // セッションIDを再生成してセッションハイジャック対策
-            session_regenerate_id(true); // [組み込み] セッションIDを新しく作り直す
-
-            $_SESSION['user_id']  = $user['id'];       // セッションにログイン情報を保存
+            session_regenerate_id(true);
+            $_SESSION['user_id']  = $user['id'];
             $_SESSION['username'] = $user['username'];
+
+            // このIPの失敗履歴をクリア
+            $pdo->prepare('DELETE FROM login_attempts WHERE ip_address = :ip')
+                ->execute([':ip' => $ip]);
 
             header('Location: ' . SITE_URL . '/admin/index.php');
             exit;
-        } else {
-            // ユーザー名が間違っている場合も同じメッセージにする（情報漏洩防止）
-            $error = 'ユーザー名またはパスワードが正しくありません。';
         }
+
+        // 失敗を記録（ユーザー名が間違っている場合も同じメッセージ：情報漏洩防止）
+        $pdo->prepare('INSERT INTO login_attempts (ip_address) VALUES (:ip)')
+            ->execute([':ip' => $ip]);
+
+        $error = 'ユーザー名またはパスワードが正しくありません。';
     }
 }
 ?>

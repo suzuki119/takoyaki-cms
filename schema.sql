@@ -60,4 +60,15 @@ CREATE TABLE IF NOT EXISTS post_categories (
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ===================================================
+-- login_attempts : ログイン試行のレート制限用
+-- 一定時間内の失敗回数で簡易的にブロックする
+-- ===================================================
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    ip_address   VARCHAR(45) NOT NULL,
+    attempted_at TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ip_time (ip_address, attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;

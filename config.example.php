@@ -65,17 +65,71 @@ function h(string $str): string
 }
 
 /**
+ * セッションを安全な設定で開始する。
+ * Cookieはhttponly, samesite=Lax, HTTPS時はsecure付き。
+ * 既にセッション開始済みの場合は何もしない。
+ */
+function start_session(): void
+{
+    if (session_status() !== PHP_SESSION_NONE) {
+        return;
+    }
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'domain'   => '',
+        'secure'   => !empty($_SERVER['HTTPS']),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    session_start();
+}
+
+/**
  * ログイン済みかチェック。未ログインならログイン画面へ飛ばす
  * 使い方： require_login();
  */
 function require_login(): void
 {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_start();
-    }
+    start_session();
 
     if (empty($_SESSION['user_id'])) {
         header('Location: ' . SITE_URL . '/login.php');
         exit;
+    }
+}
+
+/**
+ * CSRFトークンを取得（セッションごとに一意、初回呼び出し時に生成）
+ */
+function csrf_token(): string
+{
+    start_session();
+    if (empty($_SESSION['_csrf_token'])) {
+        $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['_csrf_token'];
+}
+
+/**
+ * フォームに埋め込むCSRFトークンのhidden inputを返す
+ * 使い方： <?= csrf_field() ?>
+ */
+function csrf_field(): string
+{
+    return '<input type="hidden" name="_csrf" value="' . h(csrf_token()) . '">';
+}
+
+/**
+ * POSTリクエストのCSRFトークンを検証。一致しなければHTTP 403で終了
+ * 使い方： POST処理の冒頭で verify_csrf();
+ */
+function verify_csrf(): void
+{
+    $expected = csrf_token();
+    $given    = $_POST['_csrf'] ?? '';
+    if (!is_string($given) || !hash_equals($expected, $given)) {
+        http_response_code(403);
+        exit('CSRF検証に失敗しました。フォームを再読み込みしてください。');
     }
 }

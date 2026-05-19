@@ -11,6 +11,7 @@ $pdo = db();
 //  削除処理（POSTで id が送られてきたとき）
 // ===================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['delete_id'])) {
+    verify_csrf();
     $delete_id = $_POST['delete_id'];
 
     // posts を削除すると post_categories は ON DELETE CASCADE で自動削除される
@@ -25,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['delete_id'])) {
 //  並び替え処理（↑↓ボタンが押されたとき）
 // ===================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['move_id'])) {
+    verify_csrf();
     $move_id   = (int)$_POST['move_id'];
     $direction = $_POST['direction']; // 'up' or 'down'
 
@@ -111,6 +113,7 @@ $posts = $stmt->fetchAll();
                     <td>
                         <?php if ($i > 0): ?>
                             <form method="post" style="display:inline;">
+                                <?= csrf_field() ?>
                                 <input type="hidden" name="move_id" value="<?= h($post['id']) ?>">
                                 <input type="hidden" name="direction" value="up">
                                 <button type="submit" class="sort-btn">↑</button>
@@ -118,6 +121,7 @@ $posts = $stmt->fetchAll();
                         <?php endif; ?>
                         <?php if ($i < count($posts) - 1): ?>
                             <form method="post" style="display:inline;">
+                                <?= csrf_field() ?>
                                 <input type="hidden" name="move_id" value="<?= h($post['id']) ?>">
                                 <input type="hidden" name="direction" value="down">
                                 <button type="submit" class="sort-btn">↓</button>
@@ -135,6 +139,7 @@ $posts = $stmt->fetchAll();
                     <td class="actions">
                         <a href="<?= SITE_URL ?>/admin/post-edit.php?id=<?= h($post['id']) ?>">編集</a>
                         <form method="post" onsubmit="return confirm('削除しますか？');">
+                            <?= csrf_field() ?>
                             <input type="hidden" name="delete_id" value="<?= h($post['id']) ?>">
                             <button type="submit">削除</button>
                         </form>

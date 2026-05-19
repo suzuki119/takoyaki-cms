@@ -23,10 +23,12 @@ if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
     exit;
 }
 
-$ext     = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-$allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+$ext           = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+$allowed_ext   = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+$allowed_mimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+$actual_mime   = mime_content_type($file['tmp_name']);
 
-if (!in_array($ext, $allowed)) {
+if (!in_array($ext, $allowed_ext) || !in_array($actual_mime, $allowed_mimes)) {
     echo json_encode(['error' => ['message' => '使用できる形式：jpg / png / gif / webp']]);
     exit;
 }
