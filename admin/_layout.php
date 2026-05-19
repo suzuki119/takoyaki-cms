@@ -35,6 +35,7 @@ function admin_header(string $title, string $extra_head = ''): void
                 <ul class="topnav-links">
                     <li><a href="<?= h($site_url) ?>/admin/index.php">記事</a></li>
                     <li><a href="<?= h($site_url) ?>/admin/categories.php">カテゴリ</a></li>
+                    <li><a href="<?= h($site_url) ?>/admin/tags.php">タグ</a></li>
                     <?php if ($role === 'admin'): ?>
                         <li><a href="<?= h($site_url) ?>/admin/media.php">メディア</a></li>
                         <li><a href="<?= h($site_url) ?>/admin/users.php">ユーザー</a></li>

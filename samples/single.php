@@ -15,6 +15,8 @@ if (!$post) {
 }
 
 $categories = get_post_categories((int)$post['id']);
+$tags       = get_post_tags((int)$post['id']);
+$meta       = get_all_post_meta((int)$post['id']);
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -52,6 +54,13 @@ $categories = get_post_categories((int)$post['id']);
                 <?php endforeach; ?>
             </span>
         <?php endif; ?>
+        <?php if (!empty($tags)): ?>
+            <span class="categories" style="margin-left:8px;">
+                <?php foreach ($tags as $tag): ?>
+                    <span style="background:#e0f2fe; color:#0369a1;">#<?= h($tag['name']) ?></span>
+                <?php endforeach; ?>
+            </span>
+        <?php endif; ?>
     </p>
 
     <?php if (!empty($post['thumbnail'])): ?>
@@ -71,6 +80,22 @@ $categories = get_post_categories((int)$post['id']);
             echo $body;
         ?>
     </div>
+
+    <?php if (!empty($meta)): ?>
+        <!-- カスタムフィールドの表示例（自分のサイトに合わせて自由に編集してください） -->
+        <dl style="margin-top:32px; padding:16px; background:#f9fafb; border-radius:6px; font-size:.9rem;">
+            <?php foreach ($meta as $k => $v): ?>
+                <dt style="font-weight:600; color:#374151; margin-top:8px;"><?= h($k) ?></dt>
+                <dd style="margin:0 0 0 16px; color:#555;">
+                    <?php if (is_array($v)): ?>
+                        <?= h(implode(', ', $v)) ?>
+                    <?php else: ?>
+                        <?= h((string)$v) ?>
+                    <?php endif; ?>
+                </dd>
+            <?php endforeach; ?>
+        </dl>
+    <?php endif; ?>
 </article>
 
 <p class="nav"><a href="index.php">← 記事一覧へ</a></p>

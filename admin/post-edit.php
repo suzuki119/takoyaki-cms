@@ -34,6 +34,16 @@ $pc_stmt->execute([':post_id' => $id]);
 $post_category_id  = $pc_stmt->fetch();
 $currentCategoryId = $post_category_id ? $post_category_id['category_id'] : null;
 
+// 既存のタグ（カンマ区切り表示用）
+$current_tags     = get_post_tags($id);
+$current_tags_str = implode(', ', array_column($current_tags, 'name'));
+
+// 既存のカスタムフィールド
+$current_meta = [];
+$meta_stmt    = $pdo->prepare('SELECT id, `key`, `value` FROM post_meta WHERE post_id = :p ORDER BY id ASC');
+$meta_stmt->execute([':p' => $id]);
+$current_meta = $meta_stmt->fetchAll();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $title           = trim($_POST['title']        ?? '');
@@ -44,6 +54,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $published_at_in = trim($_POST['published_at'] ?? '');
     $thumbnail       = $post['thumbnail'];
     $category_id     = $_POST['category_id']       ?? '';
+    $tags_input      = trim($_POST['tags']         ?? '');
+    $meta_keys       = $_POST['meta_key']          ?? [];
+    $meta_values     = $_POST['meta_value']        ?? [];
 
     $slug = sluggify($slug_input !== '' ? $slug_input : $title);
     $slug = $slug === '' ? null : $slug;
@@ -126,6 +139,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!empty($category_id)) {
                 $pdo->prepare('INSERT INTO post_categories (post_id, category_id) VALUES (:post_id, :category_id)')
                     ->execute([':post_id' => $id, ':category_id' => $category_id]);
+            }
+
+            // タグの更新（カンマ区切り入力）
+            set_post_tags($id, $tags_input);
+
+            // カスタムフィールドの更新（全削除 → 入れ直し）
+            $pdo->prepare('DELETE FROM post_meta WHERE post_id = :p')->execute([':p' => $id]);
+            if (is_array($meta_keys) && is_array($meta_values)) {
+                $ins = $pdo->prepare('INSERT INTO post_meta (post_id, `key`, `value`) VALUES (:p, :k, :v)');
+                foreach ($meta_keys as $i => $key) {
+                    $key = trim((string)$key);
+                    if ($key === '') continue;
+                    $val = (string)($meta_values[$i] ?? '');
+                    $ins->execute([':p' => $id, ':k' => $key, ':v' => $val]);
+                }
             }
 
             log_action('post.update', 'post', $id, 'タイトル: ' . $title);
@@ -234,6 +262,26 @@ admin_header('記事編集', $ckeditor_head);
             </select>
         </label>
 
+        <label class="field">タグ（カンマ区切り）
+            <input type="text" name="tags" value="<?= h($current_tags_str) ?>" placeholder="例: PHP, MySQL, 雑記">
+            <p class="field-hint">未登録のタグ名は自動作成されます。空にすると全タグが外れます。</p>
+        </label>
+
+        <fieldset id="meta-fieldset">
+            <legend>カスタムフィールド</legend>
+            <p class="field-hint" style="margin-top:0;">任意のキー=値メタデータ。フロントエンドから <code>get_post_meta($id, 'key')</code> で参照できます。</p>
+            <div id="meta-rows">
+                <?php foreach ($current_meta as $m): ?>
+                    <div class="meta-row" style="display:flex; gap:8px; margin-top:8px;">
+                        <input type="text" name="meta_key[]"   value="<?= h($m['key']) ?>"   placeholder="key"   style="flex:1; padding:6px 10px; border:1px solid #d1d5db; border-radius:4px;">
+                        <input type="text" name="meta_value[]" value="<?= h($m['value']) ?>" placeholder="value" style="flex:2; padding:6px 10px; border:1px solid #d1d5db; border-radius:4px;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="this.parentNode.remove()">削除</button>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" style="margin-top:12px;" onclick="addMetaRow()">+ フィールドを追加</button>
+        </fieldset>
+
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">更新する</button>
             <a class="btn-link" href="<?= SITE_URL ?>/preview.php?id=<?= h($post['id']) ?>" target="_blank">プレビュー</a>
@@ -244,6 +292,19 @@ admin_header('記事編集', $ckeditor_head);
 
 <?php
 $ckeditor_body = <<<HTML
+<script>
+function addMetaRow() {
+    const wrap = document.getElementById('meta-rows');
+    const row  = document.createElement('div');
+    row.className = 'meta-row';
+    row.style.cssText = 'display:flex; gap:8px; margin-top:8px;';
+    row.innerHTML =
+        '<input type="text" name="meta_key[]" placeholder="key" style="flex:1; padding:6px 10px; border:1px solid #d1d5db; border-radius:4px;">' +
+        '<input type="text" name="meta_value[]" placeholder="value" style="flex:2; padding:6px 10px; border:1px solid #d1d5db; border-radius:4px;">' +
+        '<button type="button" class="btn btn-secondary btn-sm" onclick="this.parentNode.remove()">削除</button>';
+    wrap.appendChild(row);
+}
+</script>
 <script type="module">
 import {
     ClassicEditor,

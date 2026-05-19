@@ -7,6 +7,41 @@
 
 ---
 
+## [1.9.0] - 2026-05-20
+
+### Added
+- **タグシステム** — カテゴリと別軸の自由ラベル
+  - `tags` / `post_tags` テーブル追加
+  - 記事編集画面でカンマ区切り入力 → 未登録タグは自動作成
+  - `admin/tags.php`（一覧・削除、editor 以上）
+  - ヘルパー: `get_tags()` / `get_post_tags($post_id)` / `set_post_tags($post_id, $tags)`
+- **カスタムフィールド (post_meta)** — 記事ごとの任意 key-value メタデータ
+  - `post_meta` テーブル追加（同じ post_id+key を複数持てる配列対応）
+  - 記事編集画面で「+ フィールドを追加」ボタンによる動的UI
+  - ヘルパー: `get_post_meta($post_id, $key, $single)` / `set_post_meta()` / `delete_post_meta()` / `get_all_post_meta()`
+- `samples/single.php` と `preview.php` にタグ表示・カスタムフィールド表示の例を追加
+- `migrations/v1.9.0.sql` — v1.8.0 からのアップグレード用SQL
+
+### Changed
+- 管理画面ナビ（全ユーザー）に「タグ」を追加
+
+### Known limitations (v1.9.0時点で見送り)
+- **REST API** — 認証設計が独立した検討事項のため v1.10.0 で別途
+- **コメント機能** — スパム対策・モデレーションUIが別ステップ規模
+- **多言語化** — 記事の多言語化はアーキ刷新が必要なため見送り
+
+### Upgrade Guide
+
+```bash
+git pull
+mysql -u <user> -p <dbname> < migrations/v1.9.0.sql
+```
+
+既存記事のタグ・カスタムフィールドは空です。
+記事編集画面から自由に追加できます。
+
+---
+
 ## [1.8.0] - 2026-05-20
 
 ### Added
