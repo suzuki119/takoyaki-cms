@@ -34,6 +34,9 @@ $cat_stmt = $pdo->prepare(
 $cat_stmt->execute([':id' => $id]);
 $post_categories = $cat_stmt->fetchAll();
 
+$post_tags = get_post_tags($id);
+$post_meta = get_all_post_meta($id);
+
 // 公開状態のラベル
 $is_live = ($post['status'] === 'published')
     && (empty($post['published_at']) || strtotime($post['published_at']) <= time());
@@ -103,6 +106,13 @@ if ($post['status'] === 'draft') {
                 <?php endforeach; ?>
             </span>
         <?php endif; ?>
+        <?php if (!empty($post_tags)): ?>
+            <span class="categories" style="margin-left:8px;">
+                <?php foreach ($post_tags as $tag): ?>
+                    <span style="background:#e0f2fe; color:#0369a1;">#<?= h($tag['name']) ?></span>
+                <?php endforeach; ?>
+            </span>
+        <?php endif; ?>
     </p>
 
     <?php if (!empty($post['thumbnail'])): ?>
@@ -116,6 +126,21 @@ if ($post['status'] === 'draft') {
     <div class="body">
         <?= $post['body'] ?? '' ?>
     </div>
+
+    <?php if (!empty($post_meta)): ?>
+        <dl style="margin-top:32px; padding:16px; background:#f9fafb; border-radius:6px; font-size:.9rem;">
+            <?php foreach ($post_meta as $k => $v): ?>
+                <dt style="font-weight:600; color:#374151; margin-top:8px;"><?= h($k) ?></dt>
+                <dd style="margin:0 0 0 16px; color:#555;">
+                    <?php if (is_array($v)): ?>
+                        <?= h(implode(', ', $v)) ?>
+                    <?php else: ?>
+                        <?= h((string)$v) ?>
+                    <?php endif; ?>
+                </dd>
+            <?php endforeach; ?>
+        </dl>
+    <?php endif; ?>
 </article>
 
 </body>

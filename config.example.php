@@ -622,6 +622,170 @@ function load_plugins(): void
     }
 }
 
+// ===================================================
+//  タグシステム
+//  カテゴリと別軸の自由ラベル。多対多 (post_tags)
+// ===================================================
+
+/**
+ * 全タグを取得（登録順）
+ */
+function get_tags(): array
+{
+    return db()->query('SELECT * FROM tags ORDER BY id ASC')->fetchAll();
+}
+
+/**
+ * 特定の記事に紐付くタグを取得
+ */
+function get_post_tags(int $post_id): array
+{
+    $stmt = db()->prepare(
+        'SELECT t.* FROM tags t
+           INNER JOIN post_tags pt ON pt.tag_id = t.id
+          WHERE pt.post_id = :id
+          ORDER BY t.id ASC'
+    );
+    $stmt->execute([':id' => $post_id]);
+    return $stmt->fetchAll();
+}
+
+/**
+ * 記事のタグを設定する。既存の紐付けは全て削除して入れ直す。
+ *
+ * @param int          $post_id
+ * @param string|array $tags  カンマ区切り文字列 or タグ名の配列
+ */
+function set_post_tags(int $post_id, $tags): void
+{
+    if (is_string($tags)) {
+        $tags = array_filter(array_map('trim', explode(',', $tags)));
+    }
+    if (!is_array($tags)) {
+        $tags = [];
+    }
+
+    $pdo = db();
+    $pdo->prepare('DELETE FROM post_tags WHERE post_id = :id')
+        ->execute([':id' => $post_id]);
+
+    foreach ($tags as $name) {
+        $name = trim((string)$name);
+        if ($name === '') continue;
+
+        // 既存タグを探す（名前で）
+        $find = $pdo->prepare('SELECT id FROM tags WHERE name = :name LIMIT 1');
+        $find->execute([':name' => $name]);
+        $row = $find->fetch();
+
+        if ($row) {
+            $tag_id = (int)$row['id'];
+        } else {
+            // 新規作成（slug は sluggify。空なら id を後で採用）
+            $slug = sluggify($name);
+            try {
+                $ins = $pdo->prepare('INSERT INTO tags (name, slug) VALUES (:n, :s)');
+                $ins->execute([':n' => $name, ':s' => $slug]);
+                $tag_id = (int)$pdo->lastInsertId();
+                if ($slug === '') {
+                    $pdo->prepare('UPDATE tags SET slug = :s WHERE id = :id')
+                        ->execute([':s' => (string)$tag_id, ':id' => $tag_id]);
+                }
+            } catch (PDOException $e) {
+                // slug衝突などは別 slug にリトライ
+                $slug2 = $slug !== '' ? $slug . '-' . substr(md5($name), 0, 6) : substr(md5($name), 0, 8);
+                $ins->execute([':n' => $name, ':s' => $slug2]);
+                $tag_id = (int)$pdo->lastInsertId();
+            }
+        }
+
+        $pdo->prepare('INSERT IGNORE INTO post_tags (post_id, tag_id) VALUES (:p, :t)')
+            ->execute([':p' => $post_id, ':t' => $tag_id]);
+    }
+}
+
+// ===================================================
+//  カスタムフィールド (post_meta)
+//  記事ごとの任意 key-value メタデータ
+// ===================================================
+
+/**
+ * 記事のカスタムフィールド値を取得。
+ *
+ * @param int    $post_id
+ * @param string $key
+ * @param bool   $single  true なら最初の1件（または null）、false なら配列
+ * @return string|array|null
+ */
+function get_post_meta(int $post_id, string $key, bool $single = true)
+{
+    $stmt = db()->prepare(
+        'SELECT `value` FROM post_meta WHERE post_id = :p AND `key` = :k ORDER BY id ASC'
+    );
+    $stmt->execute([':p' => $post_id, ':k' => $key]);
+    $vals = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    if ($single) {
+        return $vals[0] ?? null;
+    }
+    return $vals;
+}
+
+/**
+ * カスタムフィールドを保存。
+ *
+ * @param bool $unique  true: 同じ key は1件に置き換え。false: 追加で挿入。
+ */
+function set_post_meta(int $post_id, string $key, ?string $value, bool $unique = true): void
+{
+    $pdo = db();
+    if ($unique) {
+        $pdo->prepare('DELETE FROM post_meta WHERE post_id = :p AND `key` = :k')
+            ->execute([':p' => $post_id, ':k' => $key]);
+    }
+    $pdo->prepare('INSERT INTO post_meta (post_id, `key`, `value`) VALUES (:p, :k, :v)')
+        ->execute([':p' => $post_id, ':k' => $key, ':v' => $value]);
+}
+
+/**
+ * 特定のキー（任意で値も）のカスタムフィールドを削除。
+ */
+function delete_post_meta(int $post_id, string $key, ?string $value = null): void
+{
+    if ($value === null) {
+        db()->prepare('DELETE FROM post_meta WHERE post_id = :p AND `key` = :k')
+            ->execute([':p' => $post_id, ':k' => $key]);
+    } else {
+        db()->prepare('DELETE FROM post_meta WHERE post_id = :p AND `key` = :k AND `value` = :v')
+            ->execute([':p' => $post_id, ':k' => $key, ':v' => $value]);
+    }
+}
+
+/**
+ * 記事のカスタムフィールドを全て取得。
+ * 同じ key が複数あれば配列、1件なら文字列が値となる連想配列を返す。
+ */
+function get_all_post_meta(int $post_id): array
+{
+    $stmt = db()->prepare(
+        'SELECT `key`, `value` FROM post_meta WHERE post_id = :p ORDER BY id ASC'
+    );
+    $stmt->execute([':p' => $post_id]);
+
+    $result = [];
+    foreach ($stmt as $row) {
+        $k = $row['key'];
+        if (!isset($result[$k])) {
+            $result[$k] = $row['value'];
+        } elseif (is_array($result[$k])) {
+            $result[$k][] = $row['value'];
+        } else {
+            $result[$k] = [$result[$k], $row['value']];
+        }
+    }
+    return $result;
+}
+
 // プラグインを読み込む（テーブルが無い場合 get_setting が null を返すので安全）
 load_plugins();
 

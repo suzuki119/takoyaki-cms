@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $status          = $_POST['status']            ?? 'draft';
     $published_at_in = trim($_POST['published_at'] ?? '');
     $category_id     = $_POST['category_id']       ?? '';
+    $tags_input      = trim($_POST['tags']         ?? '');
 
     $slug = sluggify($slug_input !== '' ? $slug_input : $title);
     $slug = $slug === '' ? null : $slug;
@@ -95,6 +96,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':post_id'     => $newPostId,
                     ':category_id' => $category_id,
                 ]);
+            }
+
+            // タグを設定
+            if ($tags_input !== '') {
+                set_post_tags((int)$newPostId, $tags_input);
             }
 
             log_action('post.create', 'post', (int)$newPostId, 'タイトル: ' . $title);
@@ -177,6 +183,11 @@ admin_header('記事新規作成', $ckeditor_head);
                     </option>
                 <?php endforeach; ?>
             </select>
+        </label>
+
+        <label class="field">タグ（カンマ区切り）
+            <input type="text" name="tags" value="<?= h($_POST['tags'] ?? '') ?>" placeholder="例: PHP, MySQL, 雑記">
+            <p class="field-hint">未登録のタグ名は自動作成されます。</p>
         </label>
 
         <div class="form-actions">
