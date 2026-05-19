@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action'])) {
                     ':e' => $email,
                     ':r' => $role,
                 ]);
+                log_action('user.create', 'user', (int)$pdo->lastInsertId(), "username={$username}, role={$role}");
                 header('Location: ' . SITE_URL . '/admin/users.php');
                 exit;
             } catch (PDOException $e) {
@@ -65,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action'])) {
                 $error = '最後の管理者は削除できません。';
             } else {
                 $pdo->prepare('DELETE FROM users WHERE id = :id')->execute([':id' => $target_id]);
+                log_action('user.delete', 'user', $target_id);
                 header('Location: ' . SITE_URL . '/admin/users.php');
                 exit;
             }
@@ -87,6 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action'])) {
             } else {
                 $pdo->prepare('UPDATE users SET role = :r WHERE id = :id')
                     ->execute([':r' => $new_role, ':id' => $target_id]);
+                log_action('user.change_role', 'user', $target_id, "新ロール: {$new_role}");
                 header('Location: ' . SITE_URL . '/admin/users.php');
                 exit;
             }

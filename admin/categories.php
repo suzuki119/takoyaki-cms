@@ -25,14 +25,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action'])) {
             $pdo->prepare('UPDATE categories SET slug = :slug WHERE id = :id')
                 ->execute([':slug' => (string)$newId, ':id' => $newId]);
 
+            log_action('category.create', 'category', (int)$newId, '名前: ' . $name);
             header('Location: ' . SITE_URL . '/admin/categories.php');
             exit;
         }
     }
 
     if ($_POST['action'] === 'delete' && !empty($_POST['delete_id'])) {
-        $pdo->prepare('DELETE FROM categories WHERE id = :id')
-            ->execute([':id' => (int)$_POST['delete_id']]);
+        $del_id = (int)$_POST['delete_id'];
+        $pdo->prepare('DELETE FROM categories WHERE id = :id')->execute([':id' => $del_id]);
+        log_action('category.delete', 'category', $del_id);
         header('Location: ' . SITE_URL . '/admin/categories.php');
         exit;
     }

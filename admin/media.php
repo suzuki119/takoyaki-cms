@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action'])) {
         } else {
             @unlink($path);
             @unlink(UPLOAD_DIR . thumb_filename($filename));
+            log_action('media.delete', 'media', null, "ファイル: {$filename}");
             $info = h($filename) . ' を削除しました。';
         }
     }

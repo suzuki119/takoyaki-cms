@@ -394,6 +394,79 @@ function post_thumb_url(?string $filename): ?string
     return file_exists(UPLOAD_DIR . $thumb) ? UPLOAD_URL . $thumb : UPLOAD_URL . $filename;
 }
 
+// ===================================================
+//  サイト設定 (site_settings テーブル)
+//  管理画面 admin/settings.php から編集可能
+// ===================================================
+
+/**
+ * サイト設定の値を取得。
+ * 静的キャッシュで同一リクエスト内のクエリは1回のみ。
+ */
+function get_setting(string $key, ?string $default = null): ?string
+{
+    static $cache = null;
+    if ($cache === null) {
+        $cache = [];
+        try {
+            $stmt = db()->query('SELECT `key`, `value` FROM site_settings');
+            foreach ($stmt as $row) {
+                $cache[$row['key']] = $row['value'];
+            }
+        } catch (PDOException $e) {
+            // site_settings テーブルがまだ無いケース（マイグレーション前）
+            return $default;
+        }
+    }
+    return $cache[$key] ?? $default;
+}
+
+/**
+ * サイト設定の値を保存（無ければ追加、あれば更新）。
+ */
+function set_setting(string $key, ?string $value): void
+{
+    $stmt = db()->prepare(
+        'INSERT INTO site_settings (`key`, `value`) VALUES (:k, :v)
+         ON DUPLICATE KEY UPDATE `value` = :v2'
+    );
+    $stmt->execute([':k' => $key, ':v' => $value, ':v2' => $value]);
+}
+
+// ===================================================
+//  監査ログ (audit_logs テーブル)
+// ===================================================
+
+/**
+ * 監査ログを記録する。
+ *
+ * @param string  $action      'post.create', 'user.delete' など
+ * @param string  $target_type 'post', 'user', 'category', 'setting' など
+ * @param int|null $target_id  対象レコードのID
+ * @param string|null $details 任意のメモ（例: 変更前後の差分）
+ */
+function log_action(string $action, ?string $target_type = null, ?int $target_id = null, ?string $details = null): void
+{
+    start_session();
+    try {
+        $stmt = db()->prepare(
+            'INSERT INTO audit_logs (user_id, username, action, target_type, target_id, details, ip_address)
+             VALUES (:uid, :uname, :action, :ttype, :tid, :details, :ip)'
+        );
+        $stmt->execute([
+            ':uid'     => $_SESSION['user_id'] ?? null,
+            ':uname'   => $_SESSION['username'] ?? null,
+            ':action'  => $action,
+            ':ttype'   => $target_type,
+            ':tid'     => $target_id,
+            ':details' => $details,
+            ':ip'      => $_SERVER['REMOTE_ADDR'] ?? null,
+        ]);
+    } catch (PDOException $e) {
+        // ログ取得失敗時は本処理を止めない（テーブル未作成や接続瞬断）
+    }
+}
+
 /**
  * CSRFトークンを取得（セッションごとに一意、初回呼び出し時に生成）
  */

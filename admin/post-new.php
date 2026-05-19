@@ -97,6 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
             }
 
+            log_action('post.create', 'post', (int)$newPostId, 'タイトル: ' . $title);
             header('Location: ' . SITE_URL . '/admin/index.php');
             exit;
         }
