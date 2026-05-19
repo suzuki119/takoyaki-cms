@@ -20,6 +20,11 @@ define('SITE_URL', 'http://localhost:8888/takoyaki-cms');
 define('UPLOAD_DIR', __DIR__ . '/uploads/');
 define('UPLOAD_URL', SITE_URL . '/uploads/');
 
+// --- 画像アップロード設定 ---
+define('MAX_UPLOAD_SIZE',   5 * 1024 * 1024); // 5MB
+define('IMAGE_MAX_WIDTH',   1600);            // 元画像の最大幅（超えるとリサイズ）
+define('IMAGE_THUMB_WIDTH', 300);             // サムネイル変種の幅
+
 // ===================================================
 //  PDO でDB接続する関数
 // ===================================================
@@ -133,6 +138,100 @@ function sluggify(string $text, int $maxLen = 60): string
     $slug = trim($slug, '-');
     $slug = strtolower($slug);
     return substr($slug, 0, $maxLen);
+}
+
+/**
+ * GD で画像をリサイズして保存する。
+ * 元画像が $maxWidth 以下なら、$sourcePath != $destPath の場合のみコピーする。
+ * JPEG / PNG / GIF / WebP に対応。
+ *
+ * @param string $sourcePath 元画像のパス
+ * @param int    $maxWidth   最大幅（高さは比率維持）
+ * @param string $destPath   保存先パス（拡張子で出力フォーマット決定）
+ * @return bool 成功時 true
+ */
+function resize_image(string $sourcePath, int $maxWidth, string $destPath): bool
+{
+    if (!extension_loaded('gd')) {
+        return false;
+    }
+
+    $info = @getimagesize($sourcePath);
+    if (!$info) {
+        return false;
+    }
+
+    [$origW, $origH] = $info;
+    $mime = $info['mime'];
+
+    if ($mime === 'image/jpeg') {
+        $src = @imagecreatefromjpeg($sourcePath);
+    } elseif ($mime === 'image/png') {
+        $src = @imagecreatefrompng($sourcePath);
+    } elseif ($mime === 'image/gif') {
+        $src = @imagecreatefromgif($sourcePath);
+    } elseif ($mime === 'image/webp') {
+        $src = @imagecreatefromwebp($sourcePath);
+    } else {
+        return false;
+    }
+
+    if (!$src) {
+        return false;
+    }
+
+    // 縮小不要なら、必要に応じてコピーするだけで終わり
+    if ($origW <= $maxWidth) {
+        imagedestroy($src);
+        if ($sourcePath === $destPath) {
+            return true;
+        }
+        return copy($sourcePath, $destPath);
+    }
+
+    $newW = $maxWidth;
+    $newH = (int) round($origH * ($maxWidth / $origW));
+
+    $dst = imagecreatetruecolor($newW, $newH);
+
+    // PNG / GIF の透過を保持
+    if ($mime === 'image/png' || $mime === 'image/gif') {
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+        imagefilledrectangle($dst, 0, 0, $newW, $newH, $transparent);
+    }
+
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
+
+    $ext = strtolower(pathinfo($destPath, PATHINFO_EXTENSION));
+    if ($ext === 'jpg' || $ext === 'jpeg') {
+        $result = imagejpeg($dst, $destPath, 85);
+    } elseif ($ext === 'png') {
+        $result = imagepng($dst, $destPath);
+    } elseif ($ext === 'gif') {
+        $result = imagegif($dst, $destPath);
+    } elseif ($ext === 'webp') {
+        $result = imagewebp($dst, $destPath, 85);
+    } else {
+        $result = false;
+    }
+
+    imagedestroy($src);
+    imagedestroy($dst);
+
+    return $result;
+}
+
+/**
+ * 画像ファイル名から -thumb 付きのサムネイル変種名を返す。
+ *   "abc123.jpg" -> "abc123-thumb.jpg"
+ */
+function thumb_filename(string $filename): string
+{
+    $ext  = pathinfo($filename, PATHINFO_EXTENSION);
+    $base = pathinfo($filename, PATHINFO_FILENAME);
+    return $base . '-thumb.' . $ext;
 }
 
 /**
