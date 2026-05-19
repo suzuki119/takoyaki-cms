@@ -38,6 +38,9 @@ function admin_header(string $title, string $extra_head = ''): void
                     <?php if ($role === 'admin'): ?>
                         <li><a href="<?= h($site_url) ?>/admin/media.php">メディア</a></li>
                         <li><a href="<?= h($site_url) ?>/admin/users.php">ユーザー</a></li>
+                        <li><a href="<?= h($site_url) ?>/admin/settings.php">設定</a></li>
+                        <li><a href="<?= h($site_url) ?>/admin/logs.php">ログ</a></li>
+                        <li><a href="<?= h($site_url) ?>/admin/backup.php">バックアップ</a></li>
                     <?php endif; ?>
                     <li><a href="<?= h($site_url) ?>/admin/account.php">アカウント</a></li>
                     <li><a class="topnav-logout" href="<?= h($site_url) ?>/logout.php">ログアウト</a></li>

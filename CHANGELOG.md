@@ -7,6 +7,38 @@
 
 ---
 
+## [1.7.0] - 2026-05-20
+
+### Added
+- **サイト設定 (`site_settings` テーブル)** — 管理画面 `admin/settings.php` でサイト名・説明・フッターテキスト・表示件数を編集
+  - `get_setting($key, $default)` / `set_setting($key, $value)` ヘルパー追加
+- **監査ログ (`audit_logs` テーブル)** — 全操作を `admin/logs.php` で閲覧（ページネーション付き）
+  - `log_action($action, $target_type, $target_id, $details)` ヘルパー追加
+  - 記録対象: 記事 create/update/delete/bulk_delete、カテゴリ create/delete、ユーザー create/delete/change_role/reset_password/change_password、メディア delete、設定 update、バックアップ download
+- **DBバックアップ (`admin/backup.php`)** — admin限定。PHP製のSQLダンプ（mysqldump不要、共有サーバー対応）
+  - `?action=download&_csrf=...` でファイル名付きダウンロード（`Content-Disposition: attachment`）
+  - 全テーブルの CREATE TABLE + INSERT を含む
+- `samples/index.php` を `get_setting()` 利用例に更新（サイト名・説明・フッター・表示件数を設定から取得）
+- `migrations/v1.7.0.sql` — v1.6.0 からのアップグレード用SQL
+
+### Changed
+- 管理画面ナビ（admin限定）に「設定 / ログ / バックアップ」を追加
+
+### Known limitations (v1.7.0時点で見送り)
+- **エクスポート/インポート（JSON）** — 画像参照・カテゴリマッピングなどエッジケースが多いため見送り。バックアップ機能で DB レベルのポータビリティは確保済み
+
+### Upgrade Guide
+
+```bash
+git pull
+mysql -u <user> -p <dbname> < migrations/v1.7.0.sql
+```
+
+既存環境では `site_settings` に初期値が挿入されます（既存値があれば維持）。
+`admin/settings.php` から site_name 等を編集してください。
+
+---
+
 ## [1.6.0] - 2026-05-20
 
 ### Added

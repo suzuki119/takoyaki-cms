@@ -5,19 +5,27 @@
 // ===================================================
 require_once __DIR__ . '/../config.php';
 
-// 公開中の記事を取得（最新10件）
+// サイト設定を取得（管理画面 admin/settings.php で編集可能）
+$site_name        = get_setting('site_name',        'Takoyaki CMS Site');
+$site_description = get_setting('site_description', '');
+$footer_text      = get_setting('footer_text',      '');
+$posts_per_page   = (int)get_setting('posts_per_page', '10');
+
+// 公開中の記事を取得
 $posts = get_posts([
     'order_by' => 'published_at',
     'order'    => 'DESC',
-    'limit'    => 10,
+    'limit'    => $posts_per_page,
 ]);
 ?>
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>記事一覧 | サンプルサイト</title>
-    <meta name="description" content="Takoyaki CMS のサンプルテンプレートです。">
+    <title>記事一覧 | <?= h($site_name) ?></title>
+    <?php if ($site_description !== ''): ?>
+        <meta name="description" content="<?= h($site_description) ?>">
+    <?php endif; ?>
     <style>
         body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; line-height: 1.7; color: #333; }
         h1 { font-size: 1.8rem; border-bottom: 2px solid #eee; padding-bottom: 12px; }
@@ -36,7 +44,10 @@ $posts = get_posts([
     </style>
 </head>
 <body>
-    <h1>記事一覧</h1>
+    <h1><?= h($site_name) ?></h1>
+    <?php if ($site_description !== ''): ?>
+        <p style="color:#666; margin-top:-12px;"><?= h($site_description) ?></p>
+    <?php endif; ?>
 
     <?php if (empty($posts)): ?>
         <p class="empty">公開中の記事はまだありません。</p>
@@ -70,5 +81,11 @@ $posts = get_posts([
         <a href="<?= SITE_URL ?>/feed.php">RSS フィード</a>
         <a href="<?= SITE_URL ?>/sitemap.php">サイトマップ</a>
     </nav>
+
+    <?php if ($footer_text !== ''): ?>
+        <footer style="margin-top:48px; padding-top:24px; border-top:1px solid #eee; color:#888; font-size:.85rem;">
+            <?= h($footer_text) ?>
+        </footer>
+    <?php endif; ?>
 </body>
 </html>

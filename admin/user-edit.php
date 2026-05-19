@@ -44,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $hashed = password_hash($new_password, PASSWORD_DEFAULT);
             $pdo->prepare('UPDATE users SET password = :p WHERE id = :id')
                 ->execute([':p' => $hashed, ':id' => $id]);
+            log_action('user.reset_password', 'user', $id, "対象: {$user['username']}");
             $info = 'パスワードとメールを更新しました。';
         }
     } else {

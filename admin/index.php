@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['bulk_action'] ?? '') === '
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
             $stmt = $pdo->prepare("DELETE FROM posts WHERE id IN ($placeholders)");
             $stmt->execute($ids);
+            log_action('post.bulk_delete', 'post', null, '削除ID: ' . implode(',', $ids));
         }
     }
     header('Location: ' . SITE_URL . '/admin/index.php');
@@ -33,8 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['bulk_action'] ?? '') === '
 // ===================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['delete_id'])) {
     verify_csrf();
-    $pdo->prepare('DELETE FROM posts WHERE id = :id')
-        ->execute([':id' => (int)$_POST['delete_id']]);
+    $delete_id = (int)$_POST['delete_id'];
+    $pdo->prepare('DELETE FROM posts WHERE id = :id')->execute([':id' => $delete_id]);
+    log_action('post.delete', 'post', $delete_id);
     header('Location: ' . SITE_URL . '/admin/index.php');
     exit;
 }

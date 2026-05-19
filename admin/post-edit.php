@@ -128,6 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute([':post_id' => $id, ':category_id' => $category_id]);
             }
 
+            log_action('post.update', 'post', $id, 'タイトル: ' . $title);
             header('Location: ' . SITE_URL . '/admin/index.php');
             exit;
         }
