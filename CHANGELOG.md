@@ -7,6 +7,34 @@
 
 ---
 
+## [1.2.0] - 2026-05-19
+
+### Added
+- **複数管理者管理** — `admin/users.php` でユーザー一覧・追加・削除・ロール変更が可能
+- **ロール（admin / editor）** — `users.role` カラムを追加。admin は全機能、editor は記事・カテゴリ・自分のアカウントのみ操作可
+- **権限ヘルパー** — `user_role()` / `require_admin()` を `config.php` に追加
+- **パスワードリセット（admin → 他ユーザー）** — `admin/user-edit.php` で管理者が他ユーザーのパスワードを再設定
+- **自分のアカウント設定** — `admin/account.php` で自分のパスワード・メールを変更（現在のパスワード確認必須）
+- **自己ロックアウト防止** — 最後の admin の削除/降格、自分自身の削除はブロック
+- `migrations/v1.2.0.sql` — v1.1.0 からのアップグレード用SQL
+
+### Changed
+- `setup.php` の初回登録ユーザーは `role='admin'` で作成
+- ログイン成功時に `$_SESSION['role']` をセット
+- `admin/index.php` のナビゲーションに「ユーザー管理」（admin限定）と「アカウント設定」を追加
+
+### Upgrade Guide
+
+```bash
+git pull
+mysql -u <user> -p <dbname> < migrations/v1.2.0.sql
+```
+
+既存ユーザーは全員 `admin` に昇格します（v1.2.0 以前は権限分離が無かったため）。
+必要に応じて `admin/users.php` から `editor` に変更してください。
+
+---
+
 ## [1.1.0] - 2026-05-19
 
 ### Added

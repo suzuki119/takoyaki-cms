@@ -50,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             session_regenerate_id(true);
             $_SESSION['user_id']  = $user['id'];
             $_SESSION['username'] = $user['username'];
+            $_SESSION['role']     = $user['role'] ?? 'editor';
 
             // このIPの失敗履歴をクリア
             $pdo->prepare('DELETE FROM login_attempts WHERE ip_address = :ip')

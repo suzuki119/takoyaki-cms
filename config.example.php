@@ -100,6 +100,29 @@ function require_login(): void
 }
 
 /**
+ * 現在ログイン中のユーザーのロール（admin / editor）を返す。
+ * 未ログインや不明なときは空文字を返す。
+ */
+function user_role(): string
+{
+    start_session();
+    return $_SESSION['role'] ?? '';
+}
+
+/**
+ * 管理者権限を要求する。editor 以下なら 403 で終了。
+ * 使い方： require_admin();
+ */
+function require_admin(): void
+{
+    require_login();
+    if (user_role() !== 'admin') {
+        http_response_code(403);
+        exit('この操作には管理者権限が必要です。');
+    }
+}
+
+/**
  * CSRFトークンを取得（セッションごとに一意、初回呼び出し時に生成）
  */
 function csrf_token(): string
