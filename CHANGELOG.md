@@ -7,6 +7,34 @@
 
 ---
 
+## [1.3.0] - 2026-05-19
+
+### Added
+- **`posts.slug`** — URL用識別子のUNIQUEカラム。タイトル入力から自動生成も対応
+- **`posts.excerpt`** — 一覧表示用の抜粋フィールド（VARCHAR(500)）
+- **`posts.published_at`** — 公開日時を `created_at` と分離（TIMESTAMP NULL）
+- **予約公開** — `published_at` に未来日付を指定すると、その時刻まで公開されない（cron不要、クエリ側で判定）
+- **記事プレビュー画面** — `preview.php` でログイン中ユーザーが下書きや予約記事を実機表示で確認可能
+- **`sluggify()` ヘルパー** — 英数字＋ハイフン形式へ正規化（日本語のみは空文字を返す）
+- `migrations/v1.3.0.sql` — v1.2.0 からのアップグレード用SQL
+
+### Changed
+- `admin/index.php` の公開状態表示を「公開中 / 予約公開 / 下書き」の3区分に分割し、予約公開には日時を併記
+- 記事一覧から各記事のプレビューリンクへ遷移可能
+- README のフロントエンド例コードを `published_at` 条件付きクエリに更新
+
+### Upgrade Guide
+
+```bash
+git pull
+mysql -u <user> -p <dbname> < migrations/v1.3.0.sql
+```
+
+既存の公開済み記事は `published_at = created_at` で自動設定されます。
+**フロントエンド側のクエリ** を `WHERE status = 'published' AND (published_at IS NULL OR published_at <= NOW())` に更新することを推奨。
+
+---
+
 ## [1.2.0] - 2026-05-19
 
 ### Added

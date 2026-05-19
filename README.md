@@ -10,10 +10,11 @@ PHP + MySQL で動作する、シンプルな自作CMSです。
 
 ## 特徴
 
-- 約 1,500 行のPHPコード（依存ライブラリは CKEditor 5 のみ、CDN経由）
+- PHP + MySQL のみ（依存ライブラリは CKEditor 5 のみ、CDN経由）
 - 記事の作成・編集・削除、サムネイル画像、CKEditor 5 によるリッチテキスト編集
+- 記事の slug / 抜粋 / 予約公開 / プレビュー
 - カテゴリ管理、記事との多対多紐付け
-- 管理者認証（セッションベース）
+- 複数管理者（admin / editor ロール）、CSRF対策、ログイン試行回数制限
 - 並び替え（↑↓ボタンで `sort_order` 入れ替え）
 
 ---
@@ -110,11 +111,15 @@ takoyaki-cms/
 ├── setup.php            # 管理者初回登録（使用後に削除）
 ├── login.php            # ログイン画面
 ├── logout.php           # ログアウト処理
+├── preview.php          # 記事プレビュー（ログイン必須）
 ├── admin/
 │   ├── index.php        # 記事一覧
 │   ├── post-new.php     # 記事新規作成
 │   ├── post-edit.php    # 記事編集
 │   ├── categories.php   # カテゴリ管理
+│   ├── users.php        # ユーザー管理（admin限定）
+│   ├── user-edit.php    # ユーザー編集（admin限定）
+│   ├── account.php      # 自分のアカウント設定
 │   └── upload-image.php # 本文画像アップロード（CKEditor連携）
 └── uploads/             # 画像保存先（要書き込み権限）
 ```
@@ -125,10 +130,11 @@ takoyaki-cms/
 
 | テーブル | 役割 |
 |---------|------|
-| `users` | 管理者ユーザー |
-| `posts` | 記事（タイトル / 本文 / サムネイル / ステータス / 並び順） |
+| `users` | 管理者ユーザー（role: admin / editor） |
+| `posts` | 記事（タイトル / slug / 本文 / 抜粋 / サムネイル / ステータス / 公開日時 / 並び順） |
 | `categories` | カテゴリ |
 | `post_categories` | 記事とカテゴリの多対多 |
+| `login_attempts` | ログイン試行回数（レート制限用） |
 
 詳細は `schema.sql` を参照してください。
 
@@ -139,19 +145,30 @@ takoyaki-cms/
 本CMSは **管理画面のみ** を提供します。記事を表示する公開ページは含まれていません。
 利用者が自分のサイトに合わせて自由にデザイン・実装してください。
 
-DBから記事を取得する例：
+DBから公開中の記事を取得する例：
 
 ```php
 <?php
 require_once 'config.php';
 $pdo = db();
-$stmt = $pdo->prepare("SELECT * FROM posts WHERE status = 'published' ORDER BY sort_order ASC");
+
+// status='published' かつ published_at が現在以前（または未設定）の記事だけ取得
+// → 予約投稿は自動的に時刻が来るまで非表示になる
+$stmt = $pdo->prepare(
+    "SELECT * FROM posts
+      WHERE status = 'published'
+        AND (published_at IS NULL OR published_at <= NOW())
+      ORDER BY sort_order ASC"
+);
 $stmt->execute();
 $posts = $stmt->fetchAll();
 ?>
 <?php foreach ($posts as $post): ?>
     <article>
         <h2><?= h($post['title']) ?></h2>
+        <?php if (!empty($post['excerpt'])): ?>
+            <p><?= h($post['excerpt']) ?></p>
+        <?php endif; ?>
         <?= $post['body'] ?>
     </article>
 <?php endforeach; ?>
@@ -163,7 +180,7 @@ $posts = $stmt->fetchAll();
 
 このCMSは学習・小規模サイト向けです。本番運用は自己責任でお願いします。
 
-- **パスワードリセット機能なし** — 忘れた場合はDB直接更新が必要です
+- **メールによるパスワードリセットなし** — 別の管理者にリセットしてもらうか、管理者が一人だけの場合はDB直接更新が必要
 - **`setup.php` は使用後必ず削除** — 残すと第三者が管理者を上書きできます
 - **画像最適化なし** — アップロード画像はそのまま保存されます（2MB上限）
 - **セキュリティ監査未実施** — 大規模・公開度の高いサイトには適しません

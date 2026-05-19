@@ -15,10 +15,25 @@ $categories = $c_stmt->fetchAll();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
-    $title       = trim($_POST['title']  ?? '');
-    $body        = $_POST['body']        ?? '';
-    $status      = $_POST['status']      ?? 'draft';
-    $category_id = $_POST['category_id'] ?? '';
+    $title           = trim($_POST['title']        ?? '');
+    $slug_input      = trim($_POST['slug']         ?? '');
+    $body            = $_POST['body']              ?? '';
+    $excerpt         = trim($_POST['excerpt']      ?? '');
+    $status          = $_POST['status']            ?? 'draft';
+    $published_at_in = trim($_POST['published_at'] ?? '');
+    $category_id     = $_POST['category_id']       ?? '';
+
+    // slug: 入力があればそれを sluggify、無ければタイトルから自動生成（空文字なら NULL）
+    $slug = sluggify($slug_input !== '' ? $slug_input : $title);
+    $slug = $slug === '' ? null : $slug;
+
+    // published_at: datetime-local 形式 "YYYY-MM-DDTHH:MM" を MySQL DATETIME へ
+    $published_at = null;
+    if ($status === 'published') {
+        $published_at = $published_at_in !== ''
+            ? str_replace('T', ' ', $published_at_in) . ':00'
+            : date('Y-m-d H:i:s');
+    }
 
     if ($title === '') {
         $error = 'タイトルは必須です。';
@@ -52,17 +67,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($error === '') {
-            $stmt = $pdo->prepare(
-                'INSERT INTO posts (title, body, thumbnail, status, author_id)
-                 VALUES (:title, :body, :thumbnail, :status, :author_id)'
-            );
-            $stmt->execute([
-                ':title'     => $title,
-                ':body'      => $body,
-                ':thumbnail' => $thumbnail,
-                ':status'    => $status,
-                ':author_id' => $_SESSION['user_id'],
-            ]);
+            try {
+                $stmt = $pdo->prepare(
+                    'INSERT INTO posts (title, slug, body, excerpt, thumbnail, status, published_at, author_id)
+                     VALUES (:title, :slug, :body, :excerpt, :thumbnail, :status, :published_at, :author_id)'
+                );
+                $stmt->execute([
+                    ':title'        => $title,
+                    ':slug'         => $slug,
+                    ':body'         => $body,
+                    ':excerpt'      => $excerpt !== '' ? $excerpt : null,
+                    ':thumbnail'    => $thumbnail,
+                    ':status'       => $status,
+                    ':published_at' => $published_at,
+                    ':author_id'    => $_SESSION['user_id'],
+                ]);
+            } catch (PDOException $e) {
+                // slug の UNIQUE 違反など
+                $error = '記事の保存に失敗しました（slug が既存と重複している可能性があります）。';
+            }
+        }
+
+        if ($error === '') {
 
             $newPostId = $pdo->lastInsertId();
 
@@ -106,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         button[type="submit"] { padding: 10px 24px; background: #222; color: #fff; border: none; cursor: pointer; font-size: 1rem; }
         a.back { font-size: .9rem; color: #666; }
         .error { margin-top: 16px; padding: 10px; background: #fdecea; border-left: 4px solid #c0392b; font-size: .9rem; }
+        .hint { font-size: .8rem; color: #666; margin-top: 4px; font-weight: normal; }
         .ck-editor__editable { min-height: 300px; }
     </style>
 </head>
@@ -123,8 +150,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <input type="text" name="title" value="<?= h($_POST['title'] ?? '') ?>" required>
         </label>
 
+        <label>slug（URL用識別子、任意）
+            <input type="text" name="slug" value="<?= h($_POST['slug'] ?? '') ?>" placeholder="例: my-first-post">
+            <p class="hint">空欄の場合はタイトルから自動生成（日本語のみの場合は NULL）。英数字とハイフンのみ。</p>
+        </label>
+
         <label>本文
             <textarea name="body" class="wysiwyg"><?= h($_POST['body'] ?? '') ?></textarea>
+        </label>
+
+        <label>抜粋（任意、最大500文字）
+            <textarea name="excerpt" maxlength="500" style="height: 80px;"><?= h($_POST['excerpt'] ?? '') ?></textarea>
+            <p class="hint">一覧ページで表示する短い説明文。</p>
         </label>
 
         <label>サムネイル画像（任意）
@@ -136,6 +173,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <option value="draft"     <?= ($_POST['status'] ?? 'draft') === 'draft'     ? 'selected' : '' ?>>下書き</option>
                 <option value="published" <?= ($_POST['status'] ?? 'draft') === 'published' ? 'selected' : '' ?>>公開</option>
             </select>
+        </label>
+
+        <label>公開日時（任意）
+            <input type="datetime-local" name="published_at" value="<?= h($_POST['published_at'] ?? '') ?>">
+            <p class="hint">「公開」ステータスのときに有効。未来日付を指定すれば予約公開、空欄なら保存時刻を使用。</p>
         </label>
 
         <label>カテゴリー

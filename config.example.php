@@ -123,6 +123,19 @@ function require_admin(): void
 }
 
 /**
+ * 文字列をURL用 slug に変換する。
+ * 英数字・ハイフンのみに正規化。日本語のみの文字列の場合は空文字を返すので、
+ * 呼び出し側は空文字なら NULL として扱うこと。
+ */
+function sluggify(string $text, int $maxLen = 60): string
+{
+    $slug = preg_replace('/[^A-Za-z0-9]+/', '-', $text);
+    $slug = trim($slug, '-');
+    $slug = strtolower($slug);
+    return substr($slug, 0, $maxLen);
+}
+
+/**
  * CSRFトークンを取得（セッションごとに一意、初回呼び出し時に生成）
  */
 function csrf_token(): string
