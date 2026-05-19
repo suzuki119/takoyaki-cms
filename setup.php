@@ -32,8 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') { // $_SERVER=サーバー情報の�
             $hashed = password_hash($password, PASSWORD_DEFAULT);
             // [組み込み] password_hash()=パスワードをハッシュ化 / [組み込み定数] PASSWORD_DEFAULT=推奨アルゴリズムを自動選択
 
+            // 初回登録ユーザーは admin ロールで作成
             $stmt = $pdo->prepare(
-                'INSERT INTO users (username, password, email) VALUES (:username, :password, :email)'
+                'INSERT INTO users (username, password, email, role) VALUES (:username, :password, :email, "admin")'
             );
             $stmt->execute([
                 ':username' => $username,

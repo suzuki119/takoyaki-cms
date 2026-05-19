@@ -92,6 +92,10 @@ $posts = $stmt->fetchAll();
         <div class="header-actions">
             <a class="button" href="<?= SITE_URL ?>/admin/post-new.php">+ 新規作成</a>
             <a class="button" href="<?= SITE_URL ?>/admin/categories.php">+ カテゴリー</a>
+            <?php if (user_role() === 'admin'): ?>
+                <a class="button" href="<?= SITE_URL ?>/admin/users.php">ユーザー管理</a>
+            <?php endif; ?>
+            <a class="button" href="<?= SITE_URL ?>/admin/account.php">アカウント設定</a>
         </div>
     </div>
 

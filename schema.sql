@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     username   VARCHAR(50)  NOT NULL UNIQUE,
     password   VARCHAR(255) NOT NULL,
     email      VARCHAR(255) DEFAULT NULL,
+    role       ENUM('admin','editor') NOT NULL DEFAULT 'editor',
     created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
