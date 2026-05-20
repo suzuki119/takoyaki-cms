@@ -323,37 +323,23 @@ function get_posts(array $opts = []): array
  */
 function get_post($id_or_slug, bool $include_drafts = false): ?array
 {
-    if (is_numeric($id_or_slug)) {
-        $sql    = 'SELECT * FROM posts WHERE id = :v LIMIT 1';
-        $params = [':v' => (int)$id_or_slug];
-    } else {
-        $sql    = 'SELECT * FROM posts WHERE slug = :v LIMIT 1';
-        $params = [':v' => (string)$id_or_slug];
+    $col = is_numeric($id_or_slug) ? 'id' : 'slug';
+    $val = is_numeric($id_or_slug) ? (int)$id_or_slug : (string)$id_or_slug;
+
+    // 公開判定は get_posts() と同じく SQL の NOW() で行う
+    // （PHP の time() と混在させるとタイムゾーン差で不整合になるため）
+    // 削除済み（ゴミ箱内）も常に除外する
+    $sql = "SELECT * FROM posts WHERE $col = :v AND deleted_at IS NULL";
+    if (!$include_drafts) {
+        $sql .= " AND status = 'published' AND (published_at IS NULL OR published_at <= NOW())";
     }
+    $sql .= ' LIMIT 1';
 
     $stmt = db()->prepare($sql);
-    $stmt->execute($params);
+    $stmt->execute([':v' => $val]);
     $post = $stmt->fetch();
 
-    if (!$post) {
-        return null;
-    }
-
-    // 削除済み（ゴミ箱内）は返さない
-    if (!empty($post['deleted_at'])) {
-        return null;
-    }
-
-    // 公開状態のチェック
-    if (!$include_drafts) {
-        $is_live = $post['status'] === 'published'
-            && (empty($post['published_at']) || strtotime($post['published_at']) <= time());
-        if (!$is_live) {
-            return null;
-        }
-    }
-
-    return $post;
+    return $post ?: null;
 }
 
 /**

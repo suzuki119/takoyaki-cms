@@ -139,11 +139,15 @@ takoyaki-cms/
 
 | テーブル | 役割 |
 |---------|------|
-| `users` | 管理者ユーザー（role: admin / editor） |
-| `posts` | 記事（タイトル / slug / 本文 / 抜粋 / サムネイル / ステータス / 公開日時 / 並び順） |
-| `categories` | カテゴリ |
-| `post_categories` | 記事とカテゴリの多対多 |
-| `login_attempts` | ログイン試行回数（レート制限用） |
+| `posts` | 記事（タイトル / slug / 本文 / 抜粋 / サムネイル / ステータス / 公開日時 / 並び順 / 論理削除） |
+| `categories` / `post_categories` | カテゴリと多対多 |
+| `tags` / `post_tags` | タグと多対多 |
+| `post_meta` | 記事のカスタムフィールド |
+| `users` | 管理者ユーザー（admin / editor） |
+| `site_settings` | サイト設定（key-value） |
+| `audit_logs` | 操作監査ログ |
+| `login_attempts` | ログイン試行（レート制限用） |
+| `password_resets` | パスワードリセットトークン |
 
 詳細は `schema.sql` を参照してください。
 
@@ -200,16 +204,36 @@ $url = post_thumb_url($post['thumbnail']);
 
 どちらも記事URLを利用者のサイトに合わせて変更する想定です（ファイル先頭のコールバックを編集）。
 
+### きれいなURL（任意）
+
+`/post/my-slug` のようなURLを使いたい場合、フロントコントローラ `router.php` と `.htaccess` を有効化します。
+
+```bash
+cp .htaccess.example .htaccess
+# .htaccess の RewriteBase を設置パスに合わせて編集
+```
+
+| URL | 表示内容 |
+|-----|---------|
+| `/` | 記事一覧（トップ） |
+| `/post/{slug}` | 記事詳細 |
+| `/category/{slug}` | カテゴリ別一覧 |
+| `/tag/{slug}` | タグ別一覧 |
+
+- 実ファイル（`admin/`, `login.php`, `uploads/` 等）はそのまま配信され、存在しないパスのみ `router.php` に渡されます
+- `mod_rewrite` が無効な環境でも `router.php?p=/post/my-slug` の形式で動作します
+- `router.php` は公開サイトの実装例です。デザインは自由に編集してください
+
 ---
 
 ## 既知の制限・免責事項
 
 このCMSは学習・小規模サイト向けです。本番運用は自己責任でお願いします。
 
-- **メールによるパスワードリセットなし** — 別の管理者にリセットしてもらうか、管理者が一人だけの場合はDB直接更新が必要
 - **`setup.php` は使用後必ず削除** — 残すと第三者が管理者を上書きできます
-- **画像最適化なし** — アップロード画像はそのまま保存されます（2MB上限）
+- **メール送信は `mail()` 依存** — パスワードリセット等。環境によっては別途SMTP設定が必要
 - **セキュリティ監査未実施** — 大規模・公開度の高いサイトには適しません
+- **REST API / コメント / 多言語化は未実装** — 必要なら拡張するか他CMSを検討してください
 
 実装済みのセキュリティ対策については [CHANGELOG.md](CHANGELOG.md) を参照してください。
 

@@ -7,6 +7,36 @@
 
 ---
 
+## [1.12.0] - 2026-05-20
+
+### Added
+- **きれいなURL（オプトイン）**
+  - `router.php` — フロントコントローラ。`/`, `/post/{slug}`, `/category/{slug}`, `/tag/{slug}` を振り分け
+  - `.htaccess.example` — `mod_rewrite` 用の書き換え設定。実ファイルは素通し、存在しないパスのみ router.php へ
+  - `mod_rewrite` 非対応環境向けに `router.php?p=/post/slug` フォールバックも対応
+- README に「きれいなURL」設定手順とルーティング表を追加
+
+### Fixed
+- **`get_post()` の公開判定をSQLの `NOW()` に統一** — 従来は PHP の `time()` で判定しており、
+  PHP と MySQL のタイムゾーンが異なる環境で `get_posts()`（SQL判定）と結果が食い違う不具合があった。
+  あわせて削除済み（ゴミ箱）除外も SQL 側で行うよう簡素化
+
+### Changed
+- README の「データベース構成」「既知の制限」を最新の機能セットに合わせて更新
+
+### Upgrade Guide
+
+```bash
+git pull
+# きれいなURLを使う場合のみ:
+cp .htaccess.example .htaccess
+# .htaccess の RewriteBase を設置パスに合わせて編集
+```
+
+DBスキーマ変更はありません。`.htaccess` を置かなければ従来どおり動作します。
+
+---
+
 ## [1.11.0] - 2026-05-20
 
 ### Added
