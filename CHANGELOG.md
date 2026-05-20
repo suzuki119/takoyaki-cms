@@ -7,6 +7,32 @@
 
 ---
 
+## [1.10.0] - 2026-05-20
+
+### Added
+- **ゴミ箱（ソフトデリート）** — 記事削除が即時完全削除ではなくゴミ箱行きに変更
+  - `posts.deleted_at` カラム追加
+  - 記事一覧の「ゴミ箱へ」、ゴミ箱ビュー（`?view=trash`）での「復元」「完全に削除」
+  - 一括操作: 通常一覧は「ゴミ箱へ移動」、ゴミ箱では「復元」「完全に削除」
+  - ゴミ箱内の件数を記事一覧にバッジ表示
+- `migrations/v1.10.0.sql` — v1.9.0 からのアップグレード用SQL
+
+### Changed
+- `get_posts()` / `get_post()` は削除済み（ゴミ箱内）の記事を常に除外
+- 公開側（samples / feed.php / sitemap.php）にもゴミ箱の記事は出ない
+- 監査ログのアクション名: ゴミ箱移動は `post.trash` / `post.bulk_trash`、復元は `post.restore` / `post.bulk_restore`、完全削除は従来どおり `post.delete` / `post.bulk_delete`
+
+### Upgrade Guide
+
+```bash
+git pull
+mysql -u <user> -p <dbname> < migrations/v1.10.0.sql
+```
+
+既存記事は全て「ゴミ箱外（通常）」として扱われます。
+
+---
+
 ## [1.9.0] - 2026-05-20
 
 ### Added

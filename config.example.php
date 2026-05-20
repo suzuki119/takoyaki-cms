@@ -273,6 +273,9 @@ function get_posts(array $opts = []): array
     $where  = [];
     $params = [];
 
+    // 削除済み（ゴミ箱内）の記事は常に除外
+    $where[] = 'p.deleted_at IS NULL';
+
     if (!$opts['include_drafts']) {
         $where[] = "p.status = 'published'";
         $where[] = "(p.published_at IS NULL OR p.published_at <= NOW())";
@@ -329,6 +332,11 @@ function get_post($id_or_slug, bool $include_drafts = false): ?array
     $post = $stmt->fetch();
 
     if (!$post) {
+        return null;
+    }
+
+    // 削除済み（ゴミ箱内）は返さない
+    if (!empty($post['deleted_at'])) {
         return null;
     }
 
