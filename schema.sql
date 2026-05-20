@@ -43,12 +43,14 @@ CREATE TABLE IF NOT EXISTS posts (
     published_at TIMESTAMP    NULL DEFAULT NULL,
     author_id    INT          DEFAULT NULL,
     sort_order   INT          NOT NULL DEFAULT 0,
+    deleted_at   TIMESTAMP    NULL DEFAULT NULL,
     created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_slug (slug),
     INDEX idx_status (status),
     INDEX idx_published_at (published_at),
     INDEX idx_sort_order (sort_order),
+    INDEX idx_deleted_at (deleted_at),
     CONSTRAINT fk_posts_author
         FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
