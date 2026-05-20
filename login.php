@@ -102,5 +102,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </label>
         <button type="submit">ログイン</button>
     </form>
+    <p style="margin-top:16px; font-size:.85rem;">
+        <a href="<?= h(SITE_URL) ?>/forgot-password.php">パスワードをお忘れですか？</a>
+    </p>
 </body>
 </html>
