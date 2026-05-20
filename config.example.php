@@ -25,6 +25,10 @@ define('MAX_UPLOAD_SIZE',   5 * 1024 * 1024); // 5MB
 define('IMAGE_MAX_WIDTH',   1600);            // 元画像の最大幅（超えるとリサイズ）
 define('IMAGE_THUMB_WIDTH', 300);             // サムネイル変種の幅
 
+// --- メール設定 ---
+// パスワードリセット等の送信元アドレス。自分のドメインのアドレスに変更してください。
+define('MAIL_FROM', 'no-reply@example.com');
+
 // ===================================================
 //  PDO でDB接続する関数
 // ===================================================
@@ -792,6 +796,32 @@ function get_all_post_meta(int $post_id): array
         }
     }
     return $result;
+}
+
+// ===================================================
+//  メール送信
+// ===================================================
+
+/**
+ * シンプルなメール送信ヘルパー。PHP標準の mail() を使う。
+ * 共有サーバー（ロリポップ等）では mail() が利用できることが多い。
+ * 送信できない環境では false を返すので、呼び出し側で握りつぶしてよい。
+ *
+ * @return bool 送信成功なら true
+ */
+function send_email(string $to, string $subject, string $body): bool
+{
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+    $headers = [
+        'From: ' . MAIL_FROM,
+        'Content-Type: text/plain; charset=UTF-8',
+        'X-Mailer: Takoyaki CMS',
+    ];
+    // 日本語の件名を MIME エンコード
+    $encoded_subject = mb_encode_mimeheader($subject, 'UTF-8');
+    return @mail($to, $encoded_subject, $body, implode("\r\n", $headers));
 }
 
 // プラグインを読み込む（テーブルが無い場合 get_setting が null を返すので安全）
