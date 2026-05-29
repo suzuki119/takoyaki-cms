@@ -18,9 +18,10 @@ function admin_header(string $title, string $extra_head = ''): void
 {
     $site_url = defined('SITE_URL') ? SITE_URL : '';
     $role     = function_exists('user_role') ? user_role() : '';
-    ?>
+?>
     <!DOCTYPE html>
     <html lang="ja">
+
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -28,20 +29,20 @@ function admin_header(string $title, string $extra_head = ''): void
         <link rel="stylesheet" href="<?= h($site_url) ?>/admin/admin.css">
         <?= $extra_head ?>
     </head>
+
     <body>
         <nav class="topnav">
             <div class="topnav-inner">
                 <a class="topnav-brand" href="<?= h($site_url) ?>/admin/index.php">Takoyaki CMS</a>
                 <ul class="topnav-links">
                     <li><a href="<?= h($site_url) ?>/admin/index.php">記事</a></li>
-                    <li><a href="<?= h($site_url) ?>/admin/categories.php">カテゴリ</a></li>
                     <li><a href="<?= h($site_url) ?>/admin/tags.php">タグ</a></li>
                     <?php if ($role === 'admin'): ?>
                         <li><a href="<?= h($site_url) ?>/admin/media.php">メディア</a></li>
                         <li><a href="<?= h($site_url) ?>/admin/users.php">ユーザー</a></li>
                         <li><a href="<?= h($site_url) ?>/admin/settings.php">設定</a></li>
+                        <li><a href="<?= h($site_url) ?>/admin/themes.php">テーマ</a></li>
                         <li><a href="<?= h($site_url) ?>/admin/plugins.php">プラグイン</a></li>
-                        <li><a href="<?= h($site_url) ?>/admin/logs.php">ログ</a></li>
                         <li><a href="<?= h($site_url) ?>/admin/backup.php">バックアップ</a></li>
                     <?php endif; ?>
                     <li><a href="<?= h($site_url) ?>/admin/account.php">アカウント</a></li>
@@ -50,20 +51,21 @@ function admin_header(string $title, string $extra_head = ''): void
             </div>
         </nav>
         <main class="main">
-    <?php
-}
+        <?php
+    }
 
-/**
- * 管理画面ページのフッターを出力する。
- *
- * @param string $extra_body  </body> の直前に追加する文字列（ページ固有のscript等）
- */
-function admin_footer(string $extra_body = ''): void
-{
-    ?>
+    /**
+     * 管理画面ページのフッターを出力する。
+     *
+     * @param string $extra_body  </body> の直前に追加する文字列（ページ固有のscript等）
+     */
+    function admin_footer(string $extra_body = ''): void
+    {
+        ?>
         </main>
         <?= $extra_body ?>
     </body>
+
     </html>
-    <?php
-}
+<?php
+    }

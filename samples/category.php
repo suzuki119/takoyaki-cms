@@ -40,6 +40,7 @@ $posts = get_posts([
         .nav { margin-top: 32px; font-size: .85rem; }
         .nav a { color: #2980b9; }
     </style>
+    <?= theme_css_tag() ?>
 </head>
 <body>
     <h1>

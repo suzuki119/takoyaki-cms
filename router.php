@@ -130,6 +130,7 @@ if ($route === '404') {
         .excerpt { color: #555; }
         .empty { color: #999; padding: 40px 0; }
     </style>
+    <?= theme_css_tag() ?>
 </head>
 <body>
 

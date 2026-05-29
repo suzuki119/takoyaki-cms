@@ -39,6 +39,7 @@ $meta       = get_all_post_meta((int)$post['id']);
         .nav { margin-top: 48px; padding-top: 24px; border-top: 1px solid #eee; font-size: .85rem; }
         .nav a { color: #2980b9; }
     </style>
+    <?= theme_css_tag() ?>
 </head>
 <body>
 

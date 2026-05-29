@@ -9,6 +9,7 @@ require_admin();
 $info = '';
 
 // 管理可能な設定キーのホワイトリスト
+// （※ テーマ切替は専用ページ admin/themes.php に分離しているのでここには無い）
 $editable_keys = [
     'site_name'        => ['label' => 'サイト名',       'type' => 'text',     'hint' => 'samples/ テンプレートや feed.php で利用'],
     'site_description' => ['label' => 'サイト説明',     'type' => 'text',     'hint' => 'RSS/sitemap や <meta description> で利用'],

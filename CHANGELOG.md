@@ -7,6 +7,44 @@
 
 ---
 
+## [1.13.0] - 2026-05-29
+
+### Added
+- **テーマ機構（CSS差し替え方式）** — 公開ページの見た目を切り替え可能に
+  - `themes/<name>/style.css` を持つディレクトリをスキャンしてテーマとして認識
+  - サンプルテーマ3種: `default`（既存スタイルそのまま）/ `dark`（ダーク基調）/ `newspaper`（セリフ書体）
+  - **専用ページ `admin/themes.php`** — カード形式の一覧 + アクティブ表示 + 切替ボタン + プレビューリンク
+  - 管理画面ナビに「テーマ」を追加（admin限定）
+  - `site_settings.active_theme` に保存
+  - 公開ページ（`samples/index.php`, `samples/single.php`, `samples/category.php`, `router.php`）の `<head>` 末尾に
+    アクティブテーマの CSS を `<link rel="stylesheet">` で読込（既存のインラインCSSの**後ろ**で上書き）
+  - `?v={mtime}` のキャッシュバスティング付き
+  - ヘルパー: `get_themes()` / `active_theme()` / `get_theme_meta($name)` / `theme_css_url()` / `theme_css_tag()`
+- `themes/<name>/theme.json`（任意） — `name` / `description` / `version` のメタデータ
+- `themes/README.md` — テーマ開発ガイド
+- `migrations/v1.13.0.sql`
+
+### Security
+- `active_theme` の更新は `admin/themes.php` 側で `get_themes()` の戻り値のホワイトリストに含まれる値のみ許可
+  （任意のパス文字列をDBに書き込めないようにする）
+- アクティブテーマの実体が見つからない場合は自動的に `default` にフォールバック
+
+### Known limitations (v1.13.0時点で見送り)
+- **PHPテンプレート単位のテーマ切替** — index.php / single.php まで差し替えるフルテーマ方式は実装範囲が広いため見送り。
+  CSS差し替えで足りないカスタマイズは samples/ をコピー＆改造する従来手段で対応してください。
+
+### Upgrade Guide
+
+```bash
+git pull
+mysql -u <user> -p <dbname> < migrations/v1.13.0.sql
+```
+
+既存サイトの見た目はそのままです（`active_theme=default` の `style.css` は空のため）。
+管理画面 `admin/settings.php` から `dark` / `newspaper` に切替できます。
+
+---
+
 ## [1.12.0] - 2026-05-20
 
 ### Added
