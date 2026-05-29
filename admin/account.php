@@ -27,7 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $current_password  = $_POST['current_password'] ?? '';
     $new_password      = $_POST['new_password'] ?? '';
     $email             = trim($_POST['email'] ?? '');
+    $new_username      = trim($_POST['username'] ?? '');
     $changing_password = ($new_password !== '');
+    $changing_username = ($new_username !== $user['username']);
 
     if ($changing_password) {
         if (!password_verify($current_password, $user['password'])) {
@@ -39,19 +41,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if ($error === '' && $changing_username) {
+        if ($new_username === '') {
+            $error = 'ユーザー名を入力してください。';
+        } elseif (mb_strlen($new_username) > 50) {
+            $error = 'ユーザー名は50文字以内にしてください。';
+        } else {
+            $dup = $pdo->prepare('SELECT id FROM users WHERE username = :u AND id <> :id LIMIT 1');
+            $dup->execute([':u' => $new_username, ':id' => $id]);
+            if ($dup->fetch()) {
+                $error = 'そのユーザー名はすでに使われています。';
+            }
+        }
+    }
+
     if ($error === '') {
         $pdo->prepare('UPDATE users SET email = :e WHERE id = :id')
             ->execute([':e' => $email, ':id' => $id]);
+
+        $messages = [];
+
+        if ($changing_username) {
+            $old_username = $user['username'];
+            $pdo->prepare('UPDATE users SET username = :u WHERE id = :id')
+                ->execute([':u' => $new_username, ':id' => $id]);
+            $_SESSION['username'] = $new_username;
+            log_action('user.rename', 'user', $id, "自分のユーザー名を変更: {$old_username} → {$new_username}");
+            $messages[] = 'ユーザー名';
+        }
 
         if ($changing_password) {
             $hashed = password_hash($new_password, PASSWORD_DEFAULT);
             $pdo->prepare('UPDATE users SET password = :p WHERE id = :id')
                 ->execute([':p' => $hashed, ':id' => $id]);
             log_action('user.change_password', 'user', $id, '自分のパスワードを変更');
-            $info = 'パスワードとメールを更新しました。';
-        } else {
-            $info = 'メールを更新しました。';
+            $messages[] = 'パスワード';
         }
+
+        $messages[] = 'メール';
+        $info = implode('・', $messages) . 'を更新しました。';
 
         $stmt->execute([':id' => $id]);
         $user = $stmt->fetch();
@@ -62,7 +90,7 @@ admin_header('アカウント設定');
 ?>
 
 <h1 class="page-title">アカウント設定</h1>
-<p class="page-meta">ユーザー名: <?= h($user['username']) ?> ／ ロール:
+<p class="page-meta">ロール:
     <span class="badge badge-<?= h($user['role']) ?>"><?= h($user['role']) ?></span>
 </p>
 
@@ -76,6 +104,11 @@ admin_header('アカウント設定');
 <div class="card">
     <form method="post">
         <?= csrf_field() ?>
+
+        <label class="field">ユーザー名（ログイン名）
+            <input type="text" name="username" value="<?= h($user['username']) ?>" required maxlength="50" autocomplete="username">
+            <p class="field-hint">変更すると次回ログインから新しい名前を使います。</p>
+        </label>
 
         <label class="field">メールアドレス
             <input type="email" name="email" value="<?= h($user['email'] ?? '') ?>">
