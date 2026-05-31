@@ -34,6 +34,11 @@ function admin_header(string $title, string $extra_head = ''): void
         <nav class="topnav">
             <div class="topnav-inner">
                 <a class="topnav-brand" href="<?= h($site_url) ?>/admin/index.php">Takoyaki CMS</a>
+                <!-- モバイル用ハンバーガー（CSSのみで開閉） -->
+                <input type="checkbox" id="nav-toggle" class="nav-toggle" hidden>
+                <label for="nav-toggle" class="nav-burger" aria-label="メニュー">
+                    <span></span><span></span><span></span>
+                </label>
                 <ul class="topnav-links">
                     <li><a href="<?= h($site_url) ?>/admin/index.php">記事</a></li>
                     <li><a href="<?= h($site_url) ?>/admin/tags.php">タグ</a></li>
@@ -64,6 +69,23 @@ function admin_header(string $title, string $extra_head = ''): void
         ?>
         </main>
         <?= $extra_body ?>
+        <script>
+            // 横長テーブルをスマホで横スクロールできるよう自動でラップする
+            (function () {
+                document.querySelectorAll('table.table').forEach(function (t) {
+                    if (t.parentElement && t.parentElement.classList.contains('table-wrap')) return;
+                    var w = document.createElement('div');
+                    w.className = 'table-wrap';
+                    t.parentNode.insertBefore(w, t);
+                    w.appendChild(t);
+                });
+                // ハンバーガーで開いたメニューはリンクタップ時に自動で閉じる
+                var t = document.getElementById('nav-toggle');
+                if (t) document.querySelectorAll('.topnav-links a').forEach(function (a) {
+                    a.addEventListener('click', function () { t.checked = false; });
+                });
+            })();
+        </script>
     </body>
 
     </html>
