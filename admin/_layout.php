@@ -16,8 +16,13 @@
  */
 function admin_header(string $title, string $extra_head = ''): void
 {
-    $site_url = defined('SITE_URL') ? SITE_URL : '';
-    $role     = function_exists('user_role') ? user_role() : '';
+    $site_url    = defined('SITE_URL') ? SITE_URL : '';
+    $role        = function_exists('user_role') ? user_role() : '';
+    // 「サイトを表示」のリンク先（設定で上書き可能、未設定なら samples/index.php）
+    $public_url  = function_exists('get_setting') ? (string)get_setting('public_site_url', '') : '';
+    if ($public_url === '') {
+        $public_url = $site_url . '/samples/index.php';
+    }
 ?>
     <!DOCTYPE html>
     <html lang="ja">
@@ -40,6 +45,7 @@ function admin_header(string $title, string $extra_head = ''): void
                     <span></span><span></span><span></span>
                 </label>
                 <ul class="topnav-links">
+                    <li><a class="topnav-viewsite" href="<?= h($public_url) ?>" target="_blank" rel="noopener">サイトを表示 ↗</a></li>
                     <li><a href="<?= h($site_url) ?>/admin/index.php">記事</a></li>
                     <li><a href="<?= h($site_url) ?>/admin/tags.php">タグ</a></li>
                     <?php if ($role === 'admin'): ?>

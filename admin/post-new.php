@@ -105,6 +105,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             log_action('post.create', 'post', (int)$newPostId, 'タイトル: ' . $title);
             do_action('post.save', ['id' => (int)$newPostId, 'title' => $title, 'is_new' => true]);
+
+            // 「保存して公開ページを表示」ボタンで来た時はそちらへ
+            if (($_POST['post_action'] ?? '') === 'save_view') {
+                $saved = $pdo->prepare('SELECT id, slug, status, published_at FROM posts WHERE id = :id');
+                $saved->execute([':id' => (int)$newPostId]);
+                $row = $saved->fetch();
+                $dest = ($row && is_post_live($row))
+                    ? public_post_url($row)
+                    : SITE_URL . '/preview.php?id=' . (int)$newPostId;
+                header('Location: ' . $dest);
+                exit;
+            }
+
             header('Location: ' . SITE_URL . '/admin/index.php');
             exit;
         }
@@ -192,6 +205,7 @@ admin_header('記事新規作成', $ckeditor_head);
 
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">保存する</button>
+            <button type="submit" name="post_action" value="save_view" class="btn btn-secondary">保存して公開ページを表示 ↗</button>
             <a class="btn-link" href="<?= SITE_URL ?>/admin/index.php">← 一覧へ戻る</a>
         </div>
     </form>

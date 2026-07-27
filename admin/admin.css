@@ -15,6 +15,8 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neu
 .topnav-links a { color: #d1d5db; text-decoration: none; padding: 6px 12px; border-radius: 4px; font-size: .9rem; }
 .topnav-links a:hover { background: #374151; color: #fff; }
 .topnav-logout { color: #9ca3af !important; }
+.topnav-viewsite { color: #93c5fd !important; border: 1px solid #374151; margin-right: 4px; }
+.topnav-viewsite:hover { background: #2563eb !important; color: #fff !important; border-color: #2563eb; }
 
 /* メインコンテナ */
 .main { max-width: 1100px; margin: 0 auto; padding: 32px 20px 60px; }
@@ -143,20 +145,10 @@ a:hover { color: #1d4ed8; }
    レスポンシブ（タブレット 〜 スマホ）
    =================================================== */
 
-/* タブレット以下 */
+/* タブレット以下: 項目数が多く1行に収まらないため、ここからハンバーガー化 */
 @media (max-width: 900px) {
-    .topnav-inner { gap: 12px; padding: 0 16px; }
-    .topnav-links { gap: 0; }
-    .topnav-links a { padding: 6px 10px; font-size: .85rem; }
-    .main { padding: 24px 16px 48px; }
-    .media-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
-}
-
-/* スマホ */
-@media (max-width: 700px) {
-    /* --- ナビ: ハンバーガー化 --- */
     .topnav { position: relative; }
-    .topnav-inner { height: 52px; padding: 0 14px; gap: 8px; }
+    .topnav-inner { height: 52px; padding: 0 16px; gap: 8px; }
     .topnav-brand { font-size: 1rem; }
 
     .nav-burger { display: block; }
@@ -196,6 +188,12 @@ a:hover { color: #1d4ed8; }
     .nav-toggle:checked ~ .nav-burger span:nth-child(2) { opacity: 0; }
     .nav-toggle:checked ~ .nav-burger span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
 
+    .main { padding: 24px 16px 48px; }
+    .media-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+}
+
+/* スマホ */
+@media (max-width: 700px) {
     /* --- 本体 --- */
     .main { padding: 16px 12px 40px; }
     h1.page-title { font-size: 1.25rem; margin-bottom: 16px; }

@@ -265,6 +265,9 @@ admin_header($view === 'trash' ? 'ゴミ箱' : '記事一覧');
                         <?php else: ?>
                             <a href="<?= SITE_URL ?>/admin/post-edit.php?id=<?= h($post['id']) ?>">編集</a>
                             <a href="<?= SITE_URL ?>/preview.php?id=<?= h($post['id']) ?>" target="_blank">プレビュー</a>
+                            <?php if ($post['is_live']): ?>
+                                <a href="<?= h(public_post_url($post)) ?>" target="_blank" rel="noopener">公開ページ ↗</a>
+                            <?php endif; ?>
                             <form method="post" style="display:inline;" onsubmit="return confirm('この記事をゴミ箱に移動しますか？');">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="delete_id" value="<?= h($post['id']) ?>">

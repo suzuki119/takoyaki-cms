@@ -15,6 +15,8 @@ $editable_keys = [
     'site_description' => ['label' => 'サイト説明',     'type' => 'text',     'hint' => 'RSS/sitemap や <meta description> で利用'],
     'footer_text'      => ['label' => 'フッターテキスト', 'type' => 'text',     'hint' => 'samples/index.php のフッター等で利用（任意）'],
     'posts_per_page'   => ['label' => '一覧表示件数',   'type' => 'number',   'hint' => 'samples/index.php の記事一覧で表示する件数'],
+    'public_site_url'  => ['label' => '公開サイトのURL', 'type' => 'text',     'hint' => '管理画面の「サイトを表示」リンクの飛び先。空なら samples/index.php へ。組み込み先のURLを入れておくと便利'],
+    'public_article_url_pattern' => ['label' => '公開記事URLのパターン', 'type' => 'text', 'hint' => '記事一覧/編集画面の「公開ページ ↗」リンクの形式。例: https://your-site.com/news/{slug} ／ {slug} と {id} が使えます。空なら samples/single.php?slug=... or ?id=... へ'],
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
