@@ -1,9 +1,9 @@
 <?php
 // ===================================================
 //  CKEditor 5 用 画像アップロードエンドポイント
-//  SimpleUploadAdapter が POST で "upload" フィールドに画像を送ってくる
-//  成功時： {"url": "https://..."}
-//  失敗時： {"error": {"message": "..."}}
+//  SimpleUploadAdapter が POST の "upload" フィールドに画像を送ってくる。
+//    成功時: {"url": "https://..."}
+//    失敗時: {"error": {"message": "..."}}
 // ===================================================
 require_once '../config.php';
 require_login();
@@ -18,36 +18,18 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $file = $_FILES['upload'] ?? null;
 
-if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
-    echo json_encode(['error' => ['message' => 'アップロードに失敗しました']]);
+if (!is_array($file)) {
+    echo json_encode(['error' => ['message' => 'ファイルが送信されていません']]);
     exit;
 }
 
-$ext           = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-$allowed_ext   = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-$allowed_mimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-$actual_mime   = mime_content_type($file['tmp_name']);
+// 検証・リサイズ・保存は config.php に集約してある
+// （本文内画像は一覧に出さないので -thumb 変種は作らない）
+$result = handle_image_upload($file, false);
 
-if (!in_array($ext, $allowed_ext) || !in_array($actual_mime, $allowed_mimes)) {
-    echo json_encode(['error' => ['message' => '使用できる形式：jpg / png / gif / webp']]);
+if ($result['error'] !== null) {
+    echo json_encode(['error' => ['message' => $result['error']]], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-if ($file['size'] > MAX_UPLOAD_SIZE) {
-    $mb = (int)(MAX_UPLOAD_SIZE / 1024 / 1024);
-    echo json_encode(['error' => ['message' => '画像サイズは' . $mb . 'MB以下にしてください']]);
-    exit;
-}
-
-$filename = uniqid() . '.' . $ext;
-$savePath = UPLOAD_DIR . $filename;
-
-if (!move_uploaded_file($file['tmp_name'], $savePath)) {
-    echo json_encode(['error' => ['message' => '保存に失敗しました']]);
-    exit;
-}
-
-// 本文内画像もリサイズ（thumb 変種は生成しない）
-resize_image($savePath, IMAGE_MAX_WIDTH, $savePath);
-
-echo json_encode(['url' => UPLOAD_URL . $filename]);
+echo json_encode(['url' => UPLOAD_URL . $result['filename']]);

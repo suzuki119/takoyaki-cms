@@ -1,5 +1,21 @@
 # Takoyaki CMS 組み込みガイド
 
+> ## ⚠️ このガイドの本文は v1.x 時代のものです（2026-07-28 時点）
+>
+> v2.0.0 でポートフォリオCMSへ方針転換したため、**以下の記述はもう正しくありません**:
+>
+> - `$post['body']` を直接出力するコード例 → 本文は `get_post_sections()` で取得します
+> - RSS / sitemap / `router.php` / `.htaccess` の章 → **これらのファイルは削除されました**
+> - テーマ / プラグイン / ショートコードへの言及 → **機構ごと廃止されました**
+> - `post_meta`（カスタムフィールド）→ **テーブルごと削除されました**
+> - admin / editor のロールの話 → **管理者1人構成になりました**
+>
+> **[付録: ヘルパー関数チートシート](#付録-ヘルパー関数チートシート) は v2.0.0 に更新済み**なので、
+> 実装時はそちらを参照してください。設置手順・URL設計・トラブルシューティングの考え方は
+> v2.0.0 でもそのまま通用します。
+>
+> 本文全体の v2.0.0 対応は未着手です（[作業ログ](#作業ログ) 参照）。
+
 **既存の PHP サイトに記事管理機能だけを足したい人向け**のガイドです。
 サイトのデザイン・URL構造・既存テンプレートはそのままに、Takoyaki CMS を
 「記事ストア + 管理画面」として使う方法をまとめます。
@@ -674,18 +690,22 @@ curl -I https://your-site.com/takoyaki-cms/uploads/test.png
 
 ## 付録: ヘルパー関数チートシート
 
+> **v2.0.0 準拠。** この付録だけは v2.0.0 の内容に更新済みです。
+> 本文中のコード例には v1.x 時代のもの（`$post['body']` を直接出力する等）が残っています。
+
 `config.php` を require すると使えるようになる関数の一覧（公開側で使う頻度順）。
 
-### 記事
+### 作品（Works）
 
 | 関数 | 戻り値 | 用途 |
 |------|--------|------|
-| `get_posts($opts = [])` | `array[]` | 公開記事一覧 |
-| `get_post($id_or_slug)` | `array?` | 1件取得（ID または slug） |
-| `get_post_categories($post_id)` | `array[]` | 記事に紐付くカテゴリ |
-| `get_post_tags($post_id)` | `array[]` | 記事に紐付くタグ |
-| `get_all_post_meta($post_id)` | `array` | カスタムフィールド全件 |
-| `get_post_meta($post_id, $key, $single = true)` | `mixed` | 特定キーの値 |
+| `get_posts($opts = [])` | `array[]` | 公開中の作品一覧 |
+| `get_post($id_or_slug, $include_drafts = false)` | `array?` | 1件取得（ID または slug） |
+| `get_post_sections($post_id)` | `array[]` | 本文セクション（表示順） |
+| `get_post_categories($post_id)` | `array[]` | 作品に紐付くカテゴリ |
+| `get_post_tags($post_id)` | `array[]` | 作品に紐付く使用技術タグ |
+| `is_post_live($post)` | `bool` | いま公開中か（予約公開の判定込み） |
+| `public_post_url($post)` | `string` | 公開ページのURL |
 
 **`get_posts()` のオプション**:
 
@@ -694,13 +714,38 @@ curl -I https://your-site.com/takoyaki-cms/uploads/test.png
 | `limit` | `int?` | `null` | 最大件数 |
 | `offset` | `int` | `0` | ページネーション用 |
 | `category_id` | `int?` | `null` | カテゴリで絞り込み |
-| `order_by` | `string` | `'sort_order'` | `sort_order` / `created_at` / `published_at` / `updated_at` / `id` / `title` のみ可（他はデフォルトにフォールバック） |
+| `tag_id` | `int?` | `null` | タグで絞り込み |
+| `order_by` | `string` | `'sort_order'` | `sort_order` / `created_at` / `published_at` / `updated_at` / `id` / `title` のみ可 |
 | `order` | `string` | `'ASC'` | `ASC` / `DESC` |
 | `include_drafts` | `bool` | `false` | 下書き・予約公開も含めるか（プレビュー用） |
 
 **`get_posts()` / `get_post()` の戻り値の列**:
 
-`id, title, slug, body, excerpt, thumbnail, status, published_at, author_id, sort_order, deleted_at, created_at, updated_at`
+`id, title, slug, excerpt, thumbnail, status, published_at, period, type, external_url, video_url, sort_order, created_at, updated_at`
+
+> **v1.x からの変更**: `body` / `author_id` / `deleted_at` は無くなりました。
+> 本文は `get_post_sections($post['id'])` で別に取得します。
+
+**本文の出し方**:
+
+```php
+foreach (get_post_sections((int)$post['id']) as $section) {
+    if (!empty($section['title'])) {
+        echo '<h2>' . h($section['title']) . '</h2>';
+    }
+    echo $section['body'];   // CKEditor が出力したHTML。書き手＝管理者を信頼する前提
+}
+```
+
+### スキル（Skills）
+
+| 関数 | 戻り値 | 用途 |
+|------|--------|------|
+| `get_skills()` | `array[]` | 全スキル（`SKILL_CATEGORIES` 順 → `sort_order` 順） |
+| `get_skills_grouped()` | `array` | `['プログラミング' => [...], ...]` の形 |
+| `get_skill($id)` | `array?` | 1件 |
+
+列: `id, category, title, image, period, body, sort_order, created_at, updated_at`
 
 ### カテゴリ・タグ
 
@@ -710,11 +755,13 @@ curl -I https://your-site.com/takoyaki-cms/uploads/test.png
 | `get_category($id_or_slug)` | `array?` | 1件 |
 | `get_tags()` | `array[]` | 全タグ |
 
-### 画像
+### 画像・動画
 
 | 関数 | 戻り値 | 用途 |
 |------|--------|------|
 | `post_thumb_url($filename)` | `string?` | サムネ変種があればそのURL、なければ元画像URL |
+| `upload_url($filename)` | `string?` | uploads 内の原寸画像URL |
+| `video_embed_url($url)` | `string?` | YouTube / Vimeo のURLを iframe 用に変換（対応外は `null`） |
 
 ### 設定
 
@@ -722,25 +769,32 @@ curl -I https://your-site.com/takoyaki-cms/uploads/test.png
 |------|--------|------|
 | `get_setting($key, $default = null)` | `string?` | サイト設定の値 |
 
-主要キー: `site_name`, `site_description`, `footer_text`, `posts_per_page`, `active_theme`
+主要キー: `site_name`, `site_description`, `footer_text`, `posts_per_page`,
+`public_site_url`, `public_article_url_pattern`
 
 ### ユーティリティ
 
 | 関数 | 戻り値 | 用途 |
 |------|--------|------|
-| `h($str)` | `string` | XSS対策エスケープ（`htmlspecialchars`の短縮） |
+| `h($str)` | `string` | XSS対策エスケープ（null / 数値も渡せる） |
 | `db()` | `PDO` | DB接続のPDOインスタンス（生クエリを書きたい時） |
+| `sluggify($text)` | `string` | 文字列を slug 化（日本語のみなら空文字） |
+| `unique_slug($base, $table, $exclude_id, $fallback)` | `string` | 重複しない slug を作る |
 
-### 拡張（プラグインや高度な用途）
+### v2.0.0 で削除された関数
 
-| 関数 | 用途 |
-|------|------|
-| `add_action($action, $callback, $priority = 10)` | 記事保存等のタイミングでコールバック登録 |
-| `add_filter($filter, $callback, $priority = 10)` | コンテンツ加工 |
-| `add_shortcode($tag, $callback)` | `[shortcode]` を本文中で展開 |
+以下は**もう存在しません**。v1.x 向けのコードから移行する場合は置き換えが必要です。
 
-発火点: `post.save`, `post.delete`, `login.success`
-フィルター: `the_content`, `the_title`（`samples/single.php` で適用）
+| 削除された関数 | 代わりに |
+|--------------|---------|
+| `get_post_meta()` / `get_all_post_meta()` / `set_post_meta()` | `posts.period` / `type` / `external_url` / `video_url` を直接使う |
+| `add_action()` / `do_action()` | （廃止。必要なら自分でフックを書く） |
+| `add_filter()` / `apply_filters()` | （廃止） |
+| `add_shortcode()` / `do_shortcodes()` | （廃止） |
+| `theme_css_tag()` / `active_theme()` / `get_themes()` | （廃止。CSSは公開サイト側で管理する） |
+| `log_action()` | （廃止） |
+| `send_email()` | （廃止） |
+| `require_admin()` / `user_role()` | `require_login()`（管理者は1人構成） |
 
 ---
 
@@ -754,3 +808,691 @@ curl -I https://your-site.com/takoyaki-cms/uploads/test.png
 
 困ったら [README](README.md) と [CHANGELOG](CHANGELOG.md)、それから
 [samples/](samples/) と [router.php](router.php) の実装が良い参考になります。
+
+---
+---
+
+# 付記: 開発評価と改善ロードマップ
+
+> このセクションは「組み込みガイド」ではなく、**Takoyaki CMS 本体を完成させるための作業記録**です。
+> 以降の修正作業に関するメモは、すべてここに追記していきます。
+
+**評価日**: 2026-07-28
+**対象**: v1.13.0（commit `ca563ac`）
+**範囲**: PHP 30ファイル / 約5,200行 + schema.sql + ドキュメント一式を全読
+
+## 総評
+
+**完成度: 75%程度。「動くもの」としては十分に完成しているが、「配って安心なもの」まではあと2〜3歩。**
+
+設計の骨格は素直で良い。PDOのプリペアドステートメント、CSRFトークン、権限チェック、
+論理削除、監査ログ、フック/フィルター機構と、小規模CMSに必要な部品はほぼ揃っている。
+ドキュメント（README / EMBEDDING / TESTING / CHANGELOG）の質は個人プロジェクトとしては
+かなり高い水準。
+
+一方で、**「一度も踏まれていない導線」に不具合が固まっている**のが今の状態。
+並び替え、設定保存、カテゴリslug、ナビゲーション導線 — どれも「1回手で触れば気づく」
+種類の欠陥が残っている。逆に言えば、修正コストは低く、直せば一気に完成度が上がる。
+
+セキュリティは全体的に丁寧だが、**1箇所だけ明確な穴（A-1）**がある。ここは最優先。
+
+| 領域 | 評価 | コメント |
+|------|------|---------|
+| セキュリティ設計 | ◯ | 方針は一貫。A-1 の1点だけが本物の穴 |
+| 機能の網羅性 | ◯ | 小規模CMSとして必要十分。REST APIとコメントは意図的に非対応 |
+| 動作の正確さ | △ | 並び替え・設定保存・カテゴリslugが期待通り動かない |
+| 権限モデル | △ | admin/editor の境界が粗く、author_id が権限判定に未使用 |
+| UI/導線 | △ | 2つの管理ページがメニューから到達不能 |
+| コード品質 | ◯ | 読みやすい。ただし画像アップロード処理が3箇所コピペ |
+| テスト | × | 自動テストゼロ。TESTING.md の手動手順のみ |
+| ドキュメント | ◎ | このサイズのプロジェクトとしては例外的に充実 |
+
+---
+
+## A. セキュリティ（優先度: 最高）
+
+### A-1. 記事編集画面で本文が未エスケープ → 管理画面の保存型XSS 🔴
+
+`admin/post-edit.php:227`
+
+```php
+<textarea name="body" class="wysiwyg"><?= $post['body'] ?? '' ?></textarea>
+```
+
+本文に `</textarea><script>...</script>` を含む記事を保存すると、**次にその記事の編集画面を
+開いた人のブラウザで任意のJSが動く**。CKEditor が初期化される前のHTMLソースの時点で
+`</textarea>` がタグを閉じてしまうため、エディタ経由かどうかは関係ない。
+
+editor ロールのユーザーが仕込み、admin が編集画面を開けば、CSRFトークンを盗んで
+`admin/users.php` に新しい admin を追加するところまで到達できる。**権限昇格が成立する。**
+
+- 同じ箇所の `admin/post-new.php:165` は `h($_POST['body'] ?? '')` と正しくエスケープ済み。**post-edit だけ抜けている**
+- 修正は `h($post['body'] ?? '')` の1文字追加のみ。ブラウザが textarea の中身をデコードしてから
+  CKEditor が読むので、表示は一切壊れない
+- コード上のコメント（`<!-- WYSIWYGエディタの内容はHTMLのまま保存するため、h()でエスケープせずそのまま出力 -->`）は
+  誤解に基づくもの。あわせて削除する
+
+### A-2. 公開側の本文出力にサニタイズが無い（設計判断だが明示が必要）🟡
+
+`samples/single.php:81` / `router.php:160` / `preview.php:127`
+
+WYSIWYG の出力をそのまま echo している。これは「HTMLを書ける人が使う」前提なら妥当だが、
+**現状 editor ロールは公開ページに任意のJSを埋め込める**。
+
+- editor を信頼できない相手に配る運用をするなら HTMLPurifier 等が必要
+- そうでないなら「**editor = HTML/JSを書ける権限である**」と README とこのガイドに明記する。
+  今は書かれていないので、利用者が誤解する
+
+### A-3. DB接続エラーで接続情報が画面に出る 🟡
+
+`config.php:47`
+
+```php
+exit('DB接続エラー: ' . $e->getMessage());
+```
+
+本番でDB停止時に、ホスト名・DB名・ユーザー名が訪問者に見える。
+`error_log()` に出し、画面には汎用メッセージを返すべき。
+
+### A-4. `uploads/` に PHP 実行防止が無い 🟡
+
+拡張子ホワイトリスト + `mime_content_type()` の二重チェックがあるので `.php` の直接アップロードは
+防げている。ただし多層防御として `uploads/.htaccess` を同梱したい。
+
+```apache
+php_flag engine off
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .phps
+AddType text/plain .php
+```
+
+### A-5. ログインフォームにCSRFトークンが無い 🟢
+
+`login.php:96`。ログインCSRF（攻撃者のアカウントに強制ログインさせ、操作を攻撃者側に記録させる）。
+実害は限定的だが、他の全フォームに付いているので整合性のためにも追加したい。
+
+---
+
+## B. 機能バグ（優先度: 高）
+
+### B-1. 並び替え（↑↓）が実質まったく機能しない 🔴
+
+3箇所の組み合わせで壊れている。
+
+1. `schema.sql:45` — `sort_order INT NOT NULL DEFAULT 0`
+2. `admin/post-new.php:70` — INSERT 文が `sort_order` を設定しない
+3. → **全記事の `sort_order` が 0 になる**
+4. `admin/index.php:95-96` — 隣接記事を `sort_order < :order` / `> :order` で探す
+   → 全部同値なので常に0件 → ↑↓を押しても何も起きない
+
+さらに `config.php:200` の `get_posts()` は既定 `order_by = 'sort_order'` なので、
+**公開ページの記事順もMySQL任せ（不定）** になっている。
+
+修正方針:
+- INSERT時に `(SELECT COALESCE(MAX(sort_order),0)+1 FROM posts)` で採番
+- 既存データ用に `migrations/v1.14.0.sql` で `id` 順の連番を振り直す
+- swap ロジックは同値ケースのフォールバックを持たせる
+- `get_posts()` の既定順を `published_at DESC` に変えることも検討（ブログ用途ならそちらが自然）
+
+### B-2. 設定を保存しても画面が古い値を表示する 🔴
+
+`config.php:307-322` の `get_setting()` は `static $cache` で全設定をキャッシュするが、
+`set_setting()`（`config.php:324`）が**キャッシュを更新しない**。
+
+`admin/settings.php` の流れ:
+1. `:28` `$old = get_setting($key, '')` → ここで旧値がキャッシュに載る
+2. `:30` `set_setting($key, $new)` → DBは更新される
+3. `:49` `$settings[$key] = get_setting($key, '')` → **キャッシュヒットで旧値が返る**
+
+結果、「設定を更新しました（1件）」と出るのに、フォームには旧値が表示される。
+DBには正しく入っているので、リロードすれば直る — つまり **「保存できていないように見える」だけ**
+だが、利用者は確実に混乱する。
+
+コード内のコメント（`:46` `// 設定を再取得（cache は static なので、上の set_setting 後の値もこの関数経由で読める）`）は
+事実と逆。`set_setting()` 内でキャッシュも書き換えるのが正しい修正。
+
+### B-3. カテゴリの slug に数字が入る 🟠
+
+`admin/categories.php:22-26` — 追加時に slug を空文字でINSERTし、直後に**採番されたIDを文字列として**
+slug に書き戻している。
+
+```php
+$stmt->execute([':name' => $name, ':slug' => '']);
+$newId = $pdo->lastInsertId();
+$pdo->prepare('UPDATE categories SET slug = :slug WHERE id = :id')
+    ->execute([':slug' => (string)$newId, ':id' => $newId]);
+```
+
+このため `/category/blog` のようなURLは**永久に作れず**、`/category/3` しか使えない。
+`router.php:38` のカテゴリルートも、EMBEDDING.md の URL設計の章も、slug が意味のある文字列である
+前提で書かれているので、ドキュメントと実装が矛盾している。
+
+あわせて **カテゴリの編集機能が無い**（追加と削除だけ）のも埋めたい。
+記事側は `sluggify()` を使っているので、カテゴリも同じ扱いにして、
+日本語名の場合の扱い（B-4と共通）を決める。
+
+### B-4. slug の重複と日本語タイトルが未解決 🟠
+
+`config.php:104` の `sluggify()` は一意性を保証しない。
+
+- 同名タイトルの2件目 → `uk_slug` 制約違反 → 「slug が既存と重複している可能性があります」
+  というエラーで保存が拒否される（`post-new.php:84`）
+- 日本語のみのタイトル → `preg_replace('/[^A-Za-z0-9]+/', '-', ...)` で全部消えて空 → `NULL`
+  → 公開URLが `?id=1` に落ちる。**日本語サイト向けCMSとしてはこちらが既定動作になってしまう**
+
+修正方針: 保存時に重複チェックし `-2` / `-3` を自動付与。日本語タイトルは
+`post-{id}` にフォールバックするか、slug入力を必須にするかを決める。
+
+### B-5. タイムゾーン未設定 + 公開判定が二重実装 🟠
+
+`config.php` に `date_default_timezone_set()` が無く、PDO接続時の `SET time_zone` も無い。
+PHP側は php.ini（多くの環境でUTC）、MySQL側はサーバのタイムゾーンで動く。
+
+さらに公開判定が2通り実装されている:
+
+| 場所 | 判定方法 |
+|------|---------|
+| `config.php:217` `get_posts()` / `:258` `get_post()` | SQL の `NOW()` |
+| `config.php:674` `is_post_live()` | PHP の `time()` + `strtotime()` |
+| `preview.php:41-42` | PHP の `time()` + `strtotime()` |
+| `admin/index.php:137` | SQL 式 |
+
+`config.php:254` には「PHP の time() と混在させるとタイムゾーン差で不整合になるため」という
+コメントが明記されているのに、**その後に追加された `is_post_live()` がまさにそれをやっている**。
+
+環境によっては管理画面の「公開中」バッジと実際の公開状態が9時間ずれる。
+`date_default_timezone_set('Asia/Tokyo')` を config に置き、判定を1関数に統一する。
+
+### B-6. `published_at` の入力を検証していない 🟠
+
+`admin/post-new.php:33` / `admin/post-edit.php:67`
+
+```php
+$published_at = str_replace('T', ' ', $published_at_in) . ':00';
+```
+
+`datetime-local` の値をそのまま整形するだけで、形式チェックが無い。
+curl等で任意文字列を送るとそのままSQLへ渡り、strict mode では例外 →
+catch されて **「slug が既存と重複している可能性があります」という無関係なエラー**が出る。
+
+`DateTime::createFromFormat('Y-m-d\TH:i', $in)` で検証し、失敗時は専用のエラーを返す。
+
+### B-7. 記事を完全削除しても画像ファイルが残る 🟢
+
+`admin/index.php:37`（一括purge）/ `:74`（個別purge）は `DELETE FROM posts` のみ。
+サムネイル本体・`-thumb` 変種・本文内に挿入した画像がすべて `uploads/` に残り続ける。
+
+メディアライブラリで「未使用」と表示されるので手動掃除はできるが、
+purge 時にサムネイルだけでも削除するようにしたい（本文内画像の追跡は難しいので、
+「未使用画像の一括削除」ボタンをメディアライブラリに付けるほうが現実的）。
+
+---
+
+## C. UI・導線（優先度: 高 — 「完成度」に直結）
+
+### C-1. カテゴリ管理と監査ログにメニューから到達できない 🔴
+
+`admin/_layout.php:47-61` のナビゲーションに **`categories.php` と `logs.php` へのリンクが無い**。
+URL直打ちでしか開けない。
+
+- `admin/categories.php` は記事のカテゴリ付けに必須の機能。TESTING.md 第5章がテスト対象にしている
+- `admin/logs.php` も TESTING.md 第14章に手順があり、CHANGELOG では機能として謳っている
+- README のディレクトリ構成には `categories.php` が載っているが、`logs.php` は載っていない（記載漏れ）
+
+**最優先で直すべき「完成度の穴」**。ナビに2行足すだけ。
+
+### C-2. カテゴリを1つしか選べない 🟠
+
+DBは多対多（`post_categories` の複合主キー）で、`get_post_categories()` も配列を返す設計。
+しかし `post-new.php:190` / `post-edit.php:267` の入力UIは単一選択の `<select>`。
+
+複数選択（チェックボックス）にするか、「1記事1カテゴリ」と割り切ってドキュメントを実装に合わせるか、
+方針を決める必要がある。今は**DBとUIで設計思想が食い違っている**状態。
+
+### C-3. 新規作成画面にカスタムフィールドが無い 🟢
+
+`admin/post-edit.php:283` にはカスタムフィールドの入力UIがあるが、`post-new.php` には無い。
+新規作成時にメタを付けたければ、一度保存してから編集画面を開き直す必要がある。
+
+### C-4. テーマのプレビューリンクが固定 🟢
+
+`admin/themes.php:94` は常に `samples/index.php` を指す。
+`public_site_url` を設定していてもそちらへ飛ばない（`_layout.php:22` は設定を尊重しているので、挙動が不統一）。
+
+### C-5. その他の細かい点 🟢
+
+- ゴミ箱に自動削除（例: 30日後にpurge）が無い。溜まり続ける
+- ページネーションが全ページ番号を出力（`admin/index.php:295`）。記事1000件で50個のリンクが並ぶ
+- `admin/media.php:44` — 画像1件ごとに使用状況をクエリするN+1。画像が増えると重くなる
+
+---
+
+## D. 権限モデル（優先度: 中）
+
+### D-1. admin と editor の境界が粗い 🟠
+
+| ページ | 現在のガード | 実際にできること |
+|--------|------------|-----------------|
+| `admin/index.php:7` | `require_login()` | **他人の記事を含む全記事の編集・削除・完全削除** |
+| `admin/categories.php:7` | `require_login()` | カテゴリの追加・削除（サイト全体に影響） |
+| `admin/tags.php:8` | `require_login()` | タグの削除（サイト全体に影響） |
+
+`posts.author_id` はきちんと記録されているのに、**権限判定に一度も使われていない**。
+「editor は自分の記事だけ」という一般的な期待とずれている。
+
+方針を2択で決める:
+- **A案**: editor は自分の記事のみ編集可（author_id で絞る）。カテゴリ/タグの削除は admin 限定
+- **B案**: 現状維持だが、README に「editor = 記事に関する全権限を持つ信頼された編集者」と明記
+
+### D-2. セッションの寿命管理が無い 🟠
+
+- `config.php:69` — `'lifetime' => 0`（ブラウザを閉じるまで無期限）。アイドルタイムアウト無し
+- パスワード変更時に他のセッションを無効化しない（`account.php` / `user-edit.php` / `reset-password.php`）
+- 管理者が他人のパスワードをリセットしても、その人のセッションは生き続ける
+
+### D-3. ログイン試行制限がIP単位のみ 🟢
+
+`login.php:28` — IPごとに15分5回。
+
+- 共有NAT/社内LANからだと**関係ない人が巻き添えでロックされる**
+- 逆に分散した攻撃元からは無効
+- `login_attempts` は成功時に**そのIPの行しか削除されない**ので、古い行が無限に溜まる（掃除処理なし）
+
+アカウント単位のカウントを併用し、古い行を定期削除する。
+
+---
+
+## E. コード品質・保守性（優先度: 中）
+
+### E-1. 画像アップロード処理が3箇所にコピペされている 🟠
+
+| ファイル | 行 |
+|---------|-----|
+| `admin/post-new.php` | 42-65 |
+| `admin/post-edit.php` | 76-104 |
+| `admin/upload-image.php` | 26-51 |
+
+拡張子・MIME・サイズの検証ロジックがそれぞれ独立している。
+セキュリティルールを1箇所変えると他2箇所が置き去りになる典型的な構造。
+
+`config.php` に `handle_image_upload(array $file, bool $make_thumb): array` を切り出して集約する。
+**A-4 のような防御を後から追加するときにも効く。**
+
+### E-2. `h()` の型宣言で PHP 8.1+ の Deprecated が出る 🟢
+
+`config.php:58` — `function h(string $str): string`
+
+null を渡す箇所が多数ある（例: `admin/index.php:243` の `h($post['deleted_at'])`）。
+PHP 8.1 以降 `Deprecated: Passing null to parameter` の警告が出る。
+
+`function h(?string $str): string { return htmlspecialchars((string)$str, ...); }` にするだけで解消。
+int を渡している箇所（`h($post['id'])` 等）も多いので、`h($str)` を型なしにする案もある。
+
+### E-3. `admin/media.php:76` で未エスケープ出力 🟢
+
+```php
+<div class="alert alert-info"><?= $info ?></div>
+```
+
+`$info` は `:29` で `h()` 済みなので現状は無害。しかし他の全ページは
+`<?= h($info) ?>` の形なので、**規約が破れている箇所**として危うい。
+`$info` に生の文字列を入れるように書き換えられた瞬間にXSSになる。
+
+### E-4. 自動テストがゼロ 🟠
+
+TESTING.md（16章・19KB）は手動手順書として非常によく出来ているが、
+回帰チェックが完全に人力頼み。**このロードマップの修正を進めるほど、手動テストの負担が増える。**
+
+依存を増やさない範囲で、`config.php` の純粋関数だけでも自動化できる:
+
+- `sluggify()` / `thumb_filename()` / `do_shortcodes()` / `apply_filters()` / `add_filter()`
+- `public_post_url()` / `is_post_live()` / `xml_escape()`
+
+PHPUnit を入れずとも `tests/run.php` に簡易アサーションを書けば十分（`php tests/run.php` で走る）。
+CMSの思想（依存を増やさない）とも矛盾しない。
+
+### E-5. `config.php` と `config.example.php` の乖離 🟢
+
+ロジックは同一だが、example 側にしか PHPDoc が無い（config.php 720行 / example 849行）。
+実質2つのファイルを手で同期している状態。
+
+`lib/functions.php` にロジックを切り出し、`config.php` は `define()` と `require` だけにすると
+二重管理が消える。ただし「1ファイルを読めば全部わかる」という**学習用途としての利点は失われる**ので、
+このCMSの思想と相談して決める（優先度は低い）。
+
+---
+
+## F. 良い点（変えないほうがいい）
+
+修正作業で壊さないように、明示的に記録しておく。
+
+- **PDOのプリペアドステートメントが全面的に一貫している**。動的SQLを組む箇所（`get_posts()` の
+  `$where` 配列、`admin/index.php:28` の `IN (?)` プレースホルダ生成）でも値の直結合が一切ない
+- **ホワイトリスト検証の徹底** — `config.php:205`（order_by のカラム名）、
+  `admin/themes.php:22`（テーマ名）、`config.php:449`（プラグイン名の正規表現）、
+  `admin/plugins.php:16`（保存前のフィルタ）
+- **CSRF対策が丁寧** — `hash_equals()` での定数時間比較、GETのバックアップDLにまでトークンを要求
+  （`admin/backup.php:16`）
+- **パスワードリセットの実装が正しい** — 生トークンはメールのみ、DBには sha256、有効期限1時間、
+  使用済みフラグ、同ユーザーの他トークンも一括失効（`reset-password.php:52`）
+- **ユーザー列挙対策** — ログイン失敗メッセージの統一（`login.php:65`）、
+  リセット申請の結果を常に同一表示（`forgot-password.php:41`）
+- **最後の管理者を守るガード** — 削除（`users.php:65`）と降格（`users.php:87`）の両方
+- **論理削除 + ゴミ箱 + 復元** が一貫して実装されている（`deleted_at IS NULL` が
+  `get_posts()` / `get_post()` / 管理画面すべてで効いている）
+- **mysqldump 不要のPHP製バックアップ** — 共有サーバーを想定した現実的な判断
+- **ドキュメントの質** — CHANGELOG が Keep a Changelog 準拠で、
+  各バージョンで何をなぜ変えたかが追える。個人プロジェクトとしては例外的な水準
+
+---
+
+## G. 完成までのロードマップ
+
+優先度順。各フェーズはそれぞれ独立してリリース可能。
+
+### Phase 1 — 落とし穴を塞ぐ（v1.14.0）
+
+**「触れば気づくのに、まだ誰も触っていない」欠陥。ここを直すと体感の完成度が一番上がる。**
+
+| # | 内容 | 規模 |
+|---|------|------|
+| A-1 | post-edit.php の本文を `h()` でエスケープ | 1行 |
+| C-1 | ナビに カテゴリ / 監査ログ を追加 | 数行 |
+| B-2 | `set_setting()` でキャッシュを更新 | 数行 |
+| B-1 | `sort_order` の採番 + マイグレーション | 小 |
+| A-3 | DB接続エラーの詳細を画面に出さない | 数行 |
+| A-4 | `uploads/.htaccess` を同梱 | 新規ファイル |
+
+### Phase 2 — データの正しさ（v1.15.0）
+
+| # | 内容 | 規模 |
+|---|------|------|
+| B-5 | タイムゾーン設定 + 公開判定の一本化 | 小 |
+| B-3 | カテゴリ slug の正常化 + カテゴリ編集機能 | 中 |
+| B-4 | slug 重複の自動解決 + 日本語タイトルの方針決定 | 中 |
+| B-6 | `published_at` の入力検証 | 小 |
+| B-7 | purge 時のサムネイル削除 / 未使用画像の一括削除 | 小 |
+
+### Phase 3 — 権限とUI（v1.16.0）
+
+| # | 内容 | 規模 |
+|---|------|------|
+| D-1 | editor 権限の境界を決めて実装（A案/B案） | 中 |
+| C-2 | カテゴリ複数選択 or 単一に統一 | 中 |
+| C-3 | 新規作成画面にカスタムフィールド | 小 |
+| D-2 | セッションのアイドルタイムアウト + パスワード変更時の失効 | 中 |
+| C-4 / C-5 | テーマプレビューリンク、ゴミ箱の自動削除、ページネーション省略表示 | 小 |
+
+### Phase 4 — 品質の底上げ（v1.17.0）
+
+| # | 内容 | 規模 |
+|---|------|------|
+| E-1 | 画像アップロード処理の共通化 | 中 |
+| E-4 | `tests/run.php` で純粋関数の自動テスト | 中 |
+| E-2 / E-3 | `h()` の nullable 化、`media.php` のエスケープ統一 | 小 |
+| A-5 | ログインフォームのCSRFトークン | 小 |
+| D-3 | ログイン試行制限のアカウント単位併用 + 古い行の掃除 | 小 |
+| A-2 | 「editor は HTML を書ける」旨をドキュメントに明記 | 文書 |
+
+### 対象外（意図的にやらないこと）
+
+- REST API / コメント機能 / 多言語化 — README で明示的に非対応と宣言済み。方針を維持
+- E-5（config の分割）— 「1ファイルで読める」学習用途の利点とのトレードオフ。急がない
+
+---
+
+## 作業ログ
+
+以降、修正を進めるたびにここへ追記する。
+
+### 2026-07-28 (1) 初回評価
+
+- 初回評価を実施（v1.13.0 / commit `ca563ac`）。上記 A〜G を記録
+
+### 2026-07-28 (2) 方針転換 — ポートフォリオCMSへの特化
+
+上の A〜G は「汎用CMSとして完成させる」前提の評価だった。方針を転換する。
+
+---
+
+# 付記2: v2.0.0 リデザイン計画（ポートフォリオCMS特化）
+
+## 経緯
+
+このCMSは `myportfolio/cms`（ポートフォリオ専用CMS）を汎用化する形で作られた。
+しかし汎用化の過程で、**元々できていた「作品紹介」「スキル紹介」が逆にできなくなっていた**。
+
+| | 元 `myportfolio/cms` | 現 `takoyaki-cms` v1.13.0 |
+|---|---|---|
+| 作品のメタ情報 | `period` / `type` / `external_url` / `video_url` | **全部無い** |
+| 作品詳細の本文 | `post_sections`（見出し＋本文の繰り返し） | CKEditor の単一 `body` |
+| スキル紹介 | `skill` テーブル + 専用管理画面 | **無い** |
+| 汎用機能 | 無い | テーマ / プラグイン / RSS / ゴミ箱 / 監査ログ / ロール… |
+
+WordPress を目指した結果、**必要なものが消えて、使わないものが増えた**状態。
+v2.0.0 で元の目的地に戻す。
+
+## 決定事項
+
+| 論点 | 決定 |
+|------|------|
+| 位置づけ | **ポートフォリオCMSに特化**。Works（作品）+ Skills（スキル）の2本柱 |
+| 拡張機構 | 削除（プラグイン / テーマ / ショートコード） |
+| 配信系 | 削除（RSS / sitemap / router.php / .htaccess） |
+| 運用系 | 削除（監査ログ / DBバックアップ / ゴミ箱） |
+| チーム運用 | 削除（複数ユーザー / ロール / パスワードリセット）→ **管理者1人構成** |
+| 作品詳細の本文 | **セクション式を復活**（`post_sections`） |
+
+## 削除するもの
+
+### ファイル
+
+```
+feed.php                 sitemap.php              router.php
+.htaccess.example        forgot-password.php      reset-password.php
+admin/logs.php           admin/backup.php         admin/users.php
+admin/user-edit.php      admin/plugins.php        admin/themes.php
+plugins/                 themes/
+samples/index.php        samples/category.php     samples/README.md
+```
+
+### `config.php` から削除する関数
+
+```
+add_action / do_action / add_filter / apply_filters
+add_shortcode / do_shortcodes
+get_enabled_plugins / scan_plugins / load_plugins
+get_themes / active_theme / get_theme_meta / theme_css_url / theme_css_tag
+log_action / send_email / require_admin / user_role
+```
+
+> **実測（着手後に追記）**: 行数はほとんど減らなかった。
+> 汎用機構を削った一方で、`handle_image_upload()` / `unique_slug()` /
+> `parse_datetime_local()` / `video_embed_url()` / スキル系ヘルパーを足し、
+> さらに従来 `config.example.php` にしか無かった PHPDoc を本体にも入れたため。
+> ドキュメント込みで比較すると **849行（旧 example）→ 838行**。
+> 代わりに `config.php` と `config.example.php` が完全に同一ロジックになり、
+> **E-5 の二重管理は解消した**（`config.php` は example から生成するだけになった）。
+
+### テーブル
+
+| テーブル | 理由 |
+|---------|------|
+| `audit_logs` | 監査ログ削除に伴う。1人運用では意味が無い |
+| `password_resets` | パスワードリセット削除に伴う |
+| `post_meta` | `period` / `type` / `external_url` / `video_url` を**実カラムにする**ので役割が消える |
+| `users.role` カラム | 管理者1人構成のため |
+| `posts.deleted_at` カラム | ゴミ箱削除に伴う |
+| `posts.body` カラム | `post_sections` に移すため |
+| `posts.author_id` カラム | 1人構成のため |
+
+> `post_meta` は削除候補に挙げていなかったが、専用カラムを持たせる以上は完全な重複になるため
+> 削除する前提で進める。残したい場合は着手前に指摘してほしい。
+
+## 残すもの
+
+判断の根拠を明示しておく（あとで「なぜ残した」と迷わないため）。
+
+| 機能 | 残す理由 |
+|------|---------|
+| `tags` / `post_tags` テーブル | 「使用技術タグ」はポートフォリオの中核。元CMSはカンマ区切り文字列だったが、正規化済みの現行のほうが良い |
+| `categories` / `post_categories` | works のカテゴリフィルターに必要 |
+| CKEditor 5 | セクション本文の入力に引き続き使う |
+| 画像リサイズ・メディアライブラリ | 作品サムネイル / スキルアイコンで必要 |
+| 予約公開・プレビュー | 実務で使う。残す |
+| `site_settings` | サイト名 / 説明 / 公開URL に使う |
+| `login_attempts` | ログイン試行制限。管理画面が1つしか無いぶん重要度は上がる |
+
+## 新しいDB設計
+
+```sql
+users           id, username, password, email, created_at
+                -- role カラムを削除（管理者1人）
+
+posts           id, title, slug, thumbnail, excerpt, status, published_at,
+                period, type, external_url, video_url,
+                sort_order, created_at, updated_at
+                -- body / author_id / deleted_at を削除
+                -- period / type / external_url / video_url を追加（元CMSから復活）
+
+post_sections   id, post_id, sort_order, title, body        ★復活
+                -- 「見出し＋本文」の繰り返しで作品詳細を構成
+
+skills          id, category, title, image, period, body, sort_order   ★新規
+                -- category: プログラミング / デザイン / その他
+
+categories      id, name, slug
+post_categories post_id, category_id
+tags            id, name, slug
+post_tags       post_id, tag_id
+site_settings   key, value, updated_at
+login_attempts  id, ip_address, attempted_at
+```
+
+元CMSからの差分:
+
+- `skill` → `skills`（複数形に統一）、`image_url`（自由URL）→ `image`（uploads内のファイル名）に変更。
+  `posts.thumbnail` と扱いを揃え、メディアライブラリから一元管理できるようにするため
+- `skills.sort_order` を追加（元は `ORDER BY id` 固定で並べ替え不可だった）
+- `posts.slug` は takoyaki 側の資産なので維持（元CMSは `?id=` のみだった）
+
+## 新しいディレクトリ構成
+
+```
+takoyaki-cms/
+├── config.php              # DB接続 + ヘルパー（約350行に減量）
+├── schema.sql              # v2.0.0 で作り直し
+├── migrations/v2.0.0.sql   # v1.13.0 → v2.0.0
+├── setup.php  login.php  logout.php  preview.php
+├── admin/
+│   ├── index.php        # 作品一覧
+│   ├── post-new.php     # 作品 新規（セクション入力対応）
+│   ├── post-edit.php    # 作品 編集（セクション入力対応）
+│   ├── skill.php        ★ スキル一覧
+│   ├── skill-edit.php   ★ スキル 新規/編集
+│   ├── categories.php  tags.php  media.php
+│   ├── settings.php  account.php  upload-image.php
+│   └── _layout.php  admin.css
+├── samples/
+│   ├── works.php        # 作品一覧（カテゴリフィルター）
+│   ├── single.php       # 作品詳細（動画 + セクション）
+│   └── skill.php        ★ スキル一覧（カテゴリ別グリッド）
+└── uploads/
+```
+
+## 作業手順
+
+| Step | 内容 | 状態 |
+|------|------|------|
+| 1 | 不要ファイル・ディレクトリの削除 | ✅ |
+| 2 | `schema.sql` 作り直し + `migrations/v2.0.0.sql` | ✅ |
+| 3 | `config.php` / `config.example.php` の減量とヘルパー追加 | ✅ |
+| 4 | `admin/_layout.php` のナビ再構成（ロール分岐の除去、スキル追加） | ✅ |
+| 5 | 作品の新規/編集にセクションUI + 作品メタ欄を実装 | ✅ |
+| 6 | `admin/skill.php` / `admin/skill-edit.php` の新規実装 | ✅ |
+| 7 | 公開ページ `samples/works.php` / `single.php` / `skill.php` | ✅ |
+| 8 | 初回評価の A〜C の不具合を同時に修正 | ✅ |
+| 9 | README / TESTING / CHANGELOG の更新 | ✅ |
+
+### Step 8 で同時に潰す既知の不具合
+
+v2.0.0 でファイルを触るついでに、初回評価で挙げた不具合のうち該当するものを直す。
+
+| # | 内容 | 対応 |
+|---|------|------|
+| A-1 | post-edit の本文が未エスケープ（保存型XSS） | セクション本文を `h()` で出力 |
+| A-3 | DB接続エラーで接続情報が漏れる | `error_log()` + 汎用メッセージ |
+| A-4 | uploads に PHP 実行防止が無い | `uploads/.htaccess` を同梱 |
+| A-5 | ログインフォームにCSRFが無い | `csrf_field()` を追加 |
+| B-1 | sort_order が全部0で並び替えが効かない | INSERT時に採番 |
+| B-2 | 設定保存後に旧値が表示される | `set_setting()` でキャッシュ更新 |
+| B-3 | カテゴリ slug が数字になる | `sluggify()` + 重複解決を使う |
+| B-4 | slug 重複で保存できない | `unique_slug()` を新設して自動採番 |
+| B-5 | タイムゾーン未設定 / 公開判定の二重実装 | `date_default_timezone_set()` + 判定を1関数に |
+| B-6 | published_at が未検証 | `DateTime::createFromFormat()` で検証 |
+| B-7 | 完全削除で画像が残る | 削除時にサムネイルも消す |
+| C-1 | カテゴリ管理がナビから到達不能 | ナビ再構成で解決 |
+| C-2 | カテゴリが1つしか選べない | チェックボックスで複数選択に |
+| C-3 | 新規作成にカスタムフィールドが無い | セクションUIを新規/編集の両方に実装 |
+| E-1 | 画像アップロード処理が3箇所コピペ | `handle_image_upload()` に集約 |
+| E-2 | `h()` が null で Deprecated | `?string` に変更 |
+
+D-1（editor権限）/ D-2（セッション寿命）/ D-3（試行制限）は、
+**ロール自体を削除したことで D-1 は消滅**。D-2 / D-3 は v2.1.0 以降に持ち越す。
+
+---
+
+## 実装結果（2026-07-28）
+
+Step 1〜9 を実施し、**v2.0.0 として完了**。
+
+### 検証したこと
+
+ローカルの MAMP（PHP 8.5 / MySQL 8.0）で以下を確認した。
+
+| 検証 | 結果 |
+|------|------|
+| 全PHPファイルの構文チェック | 30ファイル エラーなし |
+| 削除した機能への参照が残っていないか（grep） | 残存なし |
+| `config.php` の純粋関数（slug / 日時 / 動画URL / 公開判定） | 22件 全て通過 |
+| `schema.sql` で新規DB作成 → CRUD一式 | 21件 全て通過 |
+| `migrations/v2.0.0.sql`（v1.13.0 の実データに対して） | 通過。本文5件が `post_sections` に移行、`sort_order` が 1〜5 に採番、カテゴリ slug が `cat-2` / `cat-3` に正常化、`users.role` 削除を確認 |
+| 全画面のレンダリング（開発サーバ + curl） | 管理13画面 + 公開3画面すべて 200、**PHPの警告・Notice ゼロ** |
+| 作品の保存 → 公開ページ表示の一連の流れ | 通過。動画埋め込み・制作期間・種別・セクション見出し・外部リンクが公開ページに出ることを確認 |
+
+### A-1（保存型XSS）の修正確認
+
+本文セクションに `<p>ふつうの本文</p></textarea><script>alert(1)</script>` を保存し、
+編集画面を再度開いて出力を確認した。
+
+```html
+<textarea name="section_body[]" class="wysiwyg">&lt;p&gt;ふつうの本文&lt;/p&gt;&lt;/textarea&gt;&lt;script&gt;alert(1)&lt;/script&gt;</textarea>
+```
+
+エスケープされており、textarea を抜けられないことを確認。**修正済み**。
+
+### 実行したDB操作
+
+- ローカルの `takoyaki_test` に `migrations/v2.0.0.sql` を適用済み
+- 適用前のダンプをスクラッチ領域に退避（セッション終了で消えるため、
+  長期保存したい場合は改めて `mysqldump` を取ること）
+- 検証用に作った `takoyaki_v2_test` / `takoyaki_mig_test` と、
+  スモークテスト用のユーザー・作品は削除済み
+
+### 積み残し
+
+| 項目 | 状態 |
+|------|------|
+| **EMBEDDING.md 本文の v2.0.0 対応** | **未着手**。付録のチートシートと冒頭の注意書きのみ更新した。RSS / router.php / テーマ / post_meta の章がまだ残っている |
+| **TESTING.md の v2.0.0 対応** | **未着手**。16章のうち、テーマ・プラグイン・ゴミ箱・ユーザー管理・監査ログ・バックアップ・パスワードリセットの章が対象外の機能を指している |
+| D-2 セッションのアイドルタイムアウト | v2.1.0 へ |
+| D-3 ログイン試行制限のアカウント単位併用 | v2.1.0 へ（古い行の掃除だけ先に入れた） |
+| E-4 自動テスト（`tests/run.php`） | v2.1.0 へ。今回の検証は使い捨てスクリプトで行ったため、リポジトリには残っていない |
+| C-5 ゴミ箱の自動削除 | ゴミ箱ごと廃止したため**不要になった** |
+
+### 次にやると効果が大きいこと
+
+1. **TESTING.md の作り直し** — 手動テストが今の実装と合っていないと、
+   これ以降の変更で何を確認すればいいか分からなくなる
+2. **E-4 の自動テスト化** — 今回 43件のアサーションで検証したが使い捨てにした。
+   `tests/run.php` として残せば、次の変更から再利用できる
+3. **EMBEDDING.md 本文の書き直し** — 既存サイトへの組み込みを実際にやる段階で

@@ -1,105 +1,97 @@
 <?php
 // ===================================================
-//  サンプル: 記事詳細ページ
-//  URL例: single.php?id=1   または   single.php?slug=my-post
+//  サンプル: 作品詳細
+//  URL例: single.php?slug=my-work  または  single.php?id=1
 // ===================================================
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/_layout.php';
 
 $key  = $_GET['slug'] ?? $_GET['id'] ?? null;
-$post = $key ? get_post($key) : null;
+$post = $key !== null ? get_post($key) : null;
 
 if (!$post) {
     http_response_code(404);
-    echo '<h1>記事が見つかりません</h1>';
+    site_head('作品が見つかりません');
+    echo '<div class="page-hero"><h1>404</h1><p class="page-hero-sub">お探しの作品は見つかりませんでした。</p></div>';
+    site_foot();
     exit;
 }
 
+$sections   = get_post_sections((int)$post['id']);
 $categories = get_post_categories((int)$post['id']);
 $tags       = get_post_tags((int)$post['id']);
-$meta       = get_all_post_meta((int)$post['id']);
+$embed      = video_embed_url($post['video_url'] ?? null);
+
+site_head($post['title'], (string)($post['excerpt'] ?? ''));
 ?>
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title><?= h($post['title']) ?></title>
-    <?php if (!empty($post['excerpt'])): ?>
-        <meta name="description" content="<?= h($post['excerpt']) ?>">
-    <?php endif; ?>
-    <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; line-height: 1.8; color: #333; }
-        h1 { font-size: 2rem; line-height: 1.3; }
-        .meta { color: #888; font-size: .9rem; margin-bottom: 32px; }
-        .categories span { display: inline-block; background: #eaeaea; padding: 2px 10px; border-radius: 3px; margin-right: 4px; font-size: .8rem; }
-        .thumbnail { max-width: 100%; height: auto; margin-bottom: 32px; }
-        .excerpt { font-size: 1.05rem; color: #555; border-left: 4px solid #ddd; padding: 8px 16px; margin-bottom: 32px; }
-        .body img { max-width: 100%; height: auto; }
-        .body table { border-collapse: collapse; }
-        .body table th, .body table td { border: 1px solid #ccc; padding: 8px 12px; }
-        .nav { margin-top: 48px; padding-top: 24px; border-top: 1px solid #eee; font-size: .85rem; }
-        .nav a { color: #2980b9; }
-    </style>
-    <?= theme_css_tag() ?>
-</head>
-<body>
 
-<article>
-    <h1><?= h(apply_filters('the_title', $post['title'], $post)) ?></h1>
+<article class="single">
 
-    <p class="meta">
-        <?= h($post['published_at'] ?? $post['created_at']) ?>
-        <?php if (!empty($categories)): ?>
-            <span class="categories">
-                <?php foreach ($categories as $cat): ?>
-                    <span><?= h($cat['name']) ?></span>
-                <?php endforeach; ?>
-            </span>
+    <div class="page-hero">
+        <h1><?= h($post['title']) ?></h1>
+        <?php if (!empty($post['excerpt'])): ?>
+            <p class="page-hero-sub"><?= h($post['excerpt']) ?></p>
         <?php endif; ?>
-        <?php if (!empty($tags)): ?>
-            <span class="categories" style="margin-left:8px;">
-                <?php foreach ($tags as $tag): ?>
-                    <span style="background:#e0f2fe; color:#0369a1;">#<?= h($tag['name']) ?></span>
-                <?php endforeach; ?>
-            </span>
-        <?php endif; ?>
-    </p>
-
-    <?php if (!empty($post['thumbnail'])): ?>
-        <img class="thumbnail" src="<?= UPLOAD_URL . h($post['thumbnail']) ?>" alt="">
-    <?php endif; ?>
-
-    <?php if (!empty($post['excerpt'])): ?>
-        <p class="excerpt"><?= h($post['excerpt']) ?></p>
-    <?php endif; ?>
-
-    <div class="body">
-        <?php
-            // プラグインによる本文加工チェーン + ショートコード展開
-            $body = $post['body'] ?? '';
-            $body = apply_filters('the_content', $body, $post);
-            $body = do_shortcodes($body);
-            echo $body;
-        ?>
     </div>
 
-    <?php if (!empty($meta)): ?>
-        <!-- カスタムフィールドの表示例（自分のサイトに合わせて自由に編集してください） -->
-        <dl style="margin-top:32px; padding:16px; background:#f9fafb; border-radius:6px; font-size:.9rem;">
-            <?php foreach ($meta as $k => $v): ?>
-                <dt style="font-weight:600; color:#374151; margin-top:8px;"><?= h($k) ?></dt>
-                <dd style="margin:0 0 0 16px; color:#555;">
-                    <?php if (is_array($v)): ?>
-                        <?= h(implode(', ', $v)) ?>
-                    <?php else: ?>
-                        <?= h((string)$v) ?>
-                    <?php endif; ?>
-                </dd>
-            <?php endforeach; ?>
-        </dl>
+    <?php if ($embed): ?>
+        <div class="video">
+            <iframe src="<?= h($embed) ?>" title="<?= h($post['title']) ?>"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen loading="lazy"></iframe>
+        </div>
+    <?php elseif (!empty($post['thumbnail'])): ?>
+        <img class="single-thumb" src="<?= h(upload_url($post['thumbnail'])) ?>" alt="">
     <?php endif; ?>
+
+    <dl class="single-meta">
+        <?php if (!empty($post['period'])): ?>
+            <dt>制作期間</dt><dd><?= h($post['period']) ?></dd>
+        <?php endif; ?>
+        <?php if (!empty($post['type'])): ?>
+            <dt>種別</dt><dd><?= h($post['type']) ?></dd>
+        <?php endif; ?>
+        <?php if (!empty($categories)): ?>
+            <dt>カテゴリ</dt>
+            <dd class="chips">
+                <?php foreach ($categories as $c): ?>
+                    <a href="<?= h(SITE_URL) ?>/samples/works.php?category=<?= h(rawurlencode($c['slug'])) ?>"><?= h($c['name']) ?></a>
+                <?php endforeach; ?>
+            </dd>
+        <?php endif; ?>
+        <?php if (!empty($tags)): ?>
+            <dt>使用技術</dt>
+            <dd class="chips">
+                <?php foreach ($tags as $t): ?><span class="tag"><?= h($t['name']) ?></span><?php endforeach; ?>
+            </dd>
+        <?php endif; ?>
+        <?php if (!empty($post['external_url'])): ?>
+            <dt>リンク</dt>
+            <dd>
+                <a href="<?= h($post['external_url']) ?>" target="_blank" rel="noopener noreferrer">
+                    サイトを見る ↗
+                </a>
+            </dd>
+        <?php endif; ?>
+    </dl>
+
+    <?php foreach ($sections as $section): ?>
+        <section class="single-section">
+            <?php if (!empty($section['title'])): ?>
+                <h2><?= h($section['title']) ?></h2>
+            <?php endif; ?>
+            <?php
+                // 本文は CKEditor が出力した HTML をそのまま表示する。
+                // 書き手＝管理者自身なので信頼する前提。
+                echo $section['body'] ?? '';
+            ?>
+        </section>
+    <?php endforeach; ?>
+
+    <p class="single-back">
+        <a href="<?= h(SITE_URL) ?>/samples/works.php">← 作品一覧へ</a>
+    </p>
+
 </article>
 
-<p class="nav"><a href="index.php">← 記事一覧へ</a></p>
-
-</body>
-</html>
+<?php site_foot(); ?>

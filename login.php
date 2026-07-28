@@ -18,6 +18,7 @@ const LOGIN_WINDOW_MINUTES  = 15;
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $ip       = $_SERVER['REMOTE_ADDR'] ?? '';
@@ -50,13 +51,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             session_regenerate_id(true);
             $_SESSION['user_id']  = $user['id'];
             $_SESSION['username'] = $user['username'];
-            $_SESSION['role']     = $user['role'] ?? 'editor';
 
-            // このIPの失敗履歴をクリア
+            // このIPの失敗履歴をクリアし、ついでに古い記録も掃除する
             $pdo->prepare('DELETE FROM login_attempts WHERE ip_address = :ip')
                 ->execute([':ip' => $ip]);
-
-            do_action('login.success', ['id' => (int)$user['id'], 'username' => $user['username'], 'role' => $user['role']]);
+            $pdo->exec('DELETE FROM login_attempts WHERE attempted_at < (NOW() - INTERVAL 1 DAY)');
 
             header('Location: ' . SITE_URL . '/admin/index.php');
             exit;
@@ -94,6 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php endif; ?>
 
     <form method="post">
+        <?= csrf_field() ?>
         <label>ユーザー名<br>
             <input type="text" name="username" autocomplete="username" required>
         </label>
@@ -102,8 +102,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </label>
         <button type="submit">ログイン</button>
     </form>
-    <p style="margin-top:16px; font-size:.85rem;">
-        <a href="<?= h(SITE_URL) ?>/forgot-password.php">パスワードをお忘れですか？</a>
-    </p>
 </body>
 </html>

@@ -1,279 +1,119 @@
 <?php
 // ===================================================
-//  記事新規作成
+//  作品 新規作成
 // ===================================================
 require_once '../config.php';
 require_once __DIR__ . '/_layout.php';
+require_once __DIR__ . '/_post-form.php';
 require_login();
 
 $pdo   = db();
 $error = '';
 
-$c_stmt = $pdo->prepare('SELECT * FROM categories ORDER BY id ASC');
-$c_stmt->execute();
-$categories = $c_stmt->fetchAll();
+$categories = get_categories();
+
+// 画面に表示する値（エラー時はPOSTした内容を戻す）
+$post         = ['status' => 'draft'];
+$sections     = [];
+$selected_ids = [];
+$tags_str     = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
-    $title           = trim($_POST['title']        ?? '');
-    $slug_input      = trim($_POST['slug']         ?? '');
-    $body            = $_POST['body']              ?? '';
-    $excerpt         = trim($_POST['excerpt']      ?? '');
-    $status          = $_POST['status']            ?? 'draft';
-    $published_at_in = trim($_POST['published_at'] ?? '');
-    $category_id     = $_POST['category_id']       ?? '';
-    $tags_input      = trim($_POST['tags']         ?? '');
 
-    $slug = sluggify($slug_input !== '' ? $slug_input : $title);
-    $slug = $slug === '' ? null : $slug;
+    $input        = collect_post_input();
+    $f            = $input['fields'];
+    $error        = $input['error'];
+    $sections     = $input['sections'];
+    $selected_ids = $input['categories'];
+    $tags_str     = $input['tags'];
 
-    $published_at = null;
-    if ($status === 'published') {
-        $published_at = $published_at_in !== ''
-            ? str_replace('T', ' ', $published_at_in) . ':00'
-            : date('Y-m-d H:i:s');
+    // 再表示用（保存に失敗してもフォームの内容を保つ）
+    $post = $f + ['thumbnail' => null, 'slug' => $f['slug_input'], 'published_at' => $f['published_at_raw']];
+
+    $thumbnail = null;
+    if ($error === '' && !empty($_FILES['thumbnail']['name'])) {
+        $up = handle_image_upload($_FILES['thumbnail']);
+        if ($up['error'] !== null) {
+            $error = $up['error'];
+        } else {
+            $thumbnail = $up['filename'];
+        }
     }
 
-    if ($title === '') {
-        $error = 'タイトルは必須です。';
-    } else {
-        $thumbnail = null;
+    if ($error === '') {
+        // 公開なのに日時未指定なら保存時刻を使う
+        $published_at = $f['published_at'];
+        if ($f['status'] === 'published' && $published_at === null) {
+            $published_at = date('Y-m-d H:i:s');
+        }
 
-        if (!empty($_FILES['thumbnail']['name'])) {
-            $file          = $_FILES['thumbnail'];
-            $ext           = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-            $allowed_ext   = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-            $allowed_mimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            $actual_mime   = mime_content_type($file['tmp_name']);
+        try {
+            $pdo->beginTransaction();
 
-            if (!in_array($ext, $allowed_ext) || !in_array($actual_mime, $allowed_mimes)) {
-                $error = '画像はjpg・png・gif・webpのみ使用できます。';
-            } elseif ($file['size'] > MAX_UPLOAD_SIZE) {
-                $error = '画像サイズは ' . (int)(MAX_UPLOAD_SIZE / 1024 / 1024) . 'MB 以下にしてください。';
-            } else {
-                $filename = uniqid() . '.' . $ext;
-                $savePath = UPLOAD_DIR . $filename;
+            // slug は一旦仮で入れて、採番されたIDを使って確定させる
+            $stmt = $pdo->prepare(
+                'INSERT INTO posts
+                    (title, slug, excerpt, thumbnail, status, published_at,
+                     period, type, external_url, video_url, sort_order)
+                 VALUES
+                    (:title, NULL, :excerpt, :thumbnail, :status, :published_at,
+                     :period, :type, :external_url, :video_url,
+                     (SELECT COALESCE(MAX(s.sort_order), 0) + 1 FROM (SELECT sort_order FROM posts) AS s))'
+            );
+            $stmt->execute([
+                ':title'        => $f['title'],
+                ':excerpt'      => $f['excerpt'],
+                ':thumbnail'    => $thumbnail,
+                ':status'       => $f['status'],
+                ':published_at' => $published_at,
+                ':period'       => $f['period'],
+                ':type'         => $f['type'],
+                ':external_url' => $f['external_url'],
+                ':video_url'    => $f['video_url'],
+            ]);
 
-                if (move_uploaded_file($file['tmp_name'], $savePath)) {
-                    resize_image($savePath, IMAGE_MAX_WIDTH, $savePath);
-                    resize_image($savePath, IMAGE_THUMB_WIDTH, UPLOAD_DIR . thumb_filename($filename));
-                    $thumbnail = $filename;
-                } else {
-                    $error = '画像の保存に失敗しました。';
-                }
+            $post_id = (int)$pdo->lastInsertId();
+
+            $slug = unique_slug(
+                sluggify($f['slug_input'] !== '' ? $f['slug_input'] : $f['title']),
+                'posts',
+                $post_id,
+                'work-' . $post_id
+            );
+            $pdo->prepare('UPDATE posts SET slug = :s WHERE id = :id')
+                ->execute([':s' => $slug, ':id' => $post_id]);
+
+            set_post_sections($post_id, $sections);
+            set_post_categories($post_id, $selected_ids);
+            set_post_tags($post_id, $tags_str);
+
+            $pdo->commit();
+        } catch (PDOException $e) {
+            $pdo->rollBack();
+            error_log('[Takoyaki CMS] post insert failed: ' . $e->getMessage());
+            $error = '作品の保存に失敗しました。';
+            if ($thumbnail !== null) {
+                delete_upload($thumbnail);
             }
         }
 
         if ($error === '') {
-            try {
-                $stmt = $pdo->prepare(
-                    'INSERT INTO posts (title, slug, body, excerpt, thumbnail, status, published_at, author_id)
-                     VALUES (:title, :slug, :body, :excerpt, :thumbnail, :status, :published_at, :author_id)'
-                );
-                $stmt->execute([
-                    ':title'        => $title,
-                    ':slug'         => $slug,
-                    ':body'         => $body,
-                    ':excerpt'      => $excerpt !== '' ? $excerpt : null,
-                    ':thumbnail'    => $thumbnail,
-                    ':status'       => $status,
-                    ':published_at' => $published_at,
-                    ':author_id'    => $_SESSION['user_id'],
-                ]);
-            } catch (PDOException $e) {
-                $error = '記事の保存に失敗しました（slug が既存と重複している可能性があります）。';
-            }
-        }
-
-        if ($error === '') {
-            $newPostId = $pdo->lastInsertId();
-
-            if (!empty($category_id)) {
-                $pc_stmt = $pdo->prepare(
-                    'INSERT INTO post_categories (post_id, category_id) VALUES (:post_id, :category_id)'
-                );
-                $pc_stmt->execute([
-                    ':post_id'     => $newPostId,
-                    ':category_id' => $category_id,
-                ]);
-            }
-
-            // タグを設定
-            if ($tags_input !== '') {
-                set_post_tags((int)$newPostId, $tags_input);
-            }
-
-            log_action('post.create', 'post', (int)$newPostId, 'タイトル: ' . $title);
-            do_action('post.save', ['id' => (int)$newPostId, 'title' => $title, 'is_new' => true]);
-
-            // 「保存して公開ページを表示」ボタンで来た時はそちらへ
-            if (($_POST['post_action'] ?? '') === 'save_view') {
-                $saved = $pdo->prepare('SELECT id, slug, status, published_at FROM posts WHERE id = :id');
-                $saved->execute([':id' => (int)$newPostId]);
-                $row = $saved->fetch();
-                $dest = ($row && is_post_live($row))
-                    ? public_post_url($row)
-                    : SITE_URL . '/preview.php?id=' . (int)$newPostId;
-                header('Location: ' . $dest);
-                exit;
-            }
-
-            header('Location: ' . SITE_URL . '/admin/index.php');
+            header('Location: ' . post_save_redirect($post_id));
             exit;
         }
     }
 }
 
-$ckeditor_head = <<<'HTML'
-<link rel="stylesheet" href="https://cdn.ckeditor.com/ckeditor5/43.3.1/ckeditor5.css">
-<script type="importmap">
-{
-    "imports": {
-        "ckeditor5": "https://cdn.ckeditor.com/ckeditor5/43.3.1/ckeditor5.js",
-        "ckeditor5/": "https://cdn.ckeditor.com/ckeditor5/43.3.1/"
-    }
-}
-</script>
-<style>
-    .ck-editor__editable { min-height: 300px; }
-</style>
-HTML;
-
-admin_header('記事新規作成', $ckeditor_head);
+admin_header('作品 新規作成', post_form_head());
 ?>
 
-<h1 class="page-title">記事新規作成</h1>
+<h1 class="page-title">作品 新規作成</h1>
 
 <?php if ($error !== ''): ?>
     <div class="alert alert-error"><?= h($error) ?></div>
 <?php endif; ?>
 
-<div class="card">
-    <form method="post" enctype="multipart/form-data">
-        <?= csrf_field() ?>
+<?php render_post_form($post, $sections, $categories, $selected_ids, $tags_str, true); ?>
 
-        <label class="field">タイトル
-            <input type="text" name="title" value="<?= h($_POST['title'] ?? '') ?>" required>
-        </label>
-
-        <label class="field">slug（URL用識別子、任意）
-            <input type="text" name="slug" value="<?= h($_POST['slug'] ?? '') ?>" placeholder="例: my-first-post">
-            <p class="field-hint">空欄の場合はタイトルから自動生成（日本語のみの場合は NULL）。英数字とハイフンのみ。</p>
-        </label>
-
-        <label class="field">本文
-            <textarea name="body" class="wysiwyg"><?= h($_POST['body'] ?? '') ?></textarea>
-        </label>
-
-        <label class="field">抜粋（任意、最大500文字）
-            <textarea name="excerpt" maxlength="500" style="height:80px;"><?= h($_POST['excerpt'] ?? '') ?></textarea>
-            <p class="field-hint">一覧ページで表示する短い説明文。</p>
-        </label>
-
-        <label class="field">サムネイル画像（任意）
-            <input type="file" name="thumbnail" accept="image/*">
-        </label>
-
-        <label class="field">ステータス
-            <select name="status">
-                <option value="draft"     <?= ($_POST['status'] ?? 'draft') === 'draft'     ? 'selected' : '' ?>>下書き</option>
-                <option value="published" <?= ($_POST['status'] ?? 'draft') === 'published' ? 'selected' : '' ?>>公開</option>
-            </select>
-        </label>
-
-        <label class="field">公開日時（任意）
-            <input type="datetime-local" name="published_at" value="<?= h($_POST['published_at'] ?? '') ?>">
-            <p class="field-hint">「公開」ステータスのときに有効。未来日付なら予約公開、空欄なら保存時刻を使用。</p>
-        </label>
-
-        <label class="field">カテゴリー
-            <select name="category_id">
-                <option value="">選択してください</option>
-                <?php foreach ($categories as $category): ?>
-                    <option value="<?= h($category['id']) ?>"
-                        <?= ($_POST['category_id'] ?? '') == $category['id'] ? 'selected' : '' ?>>
-                        <?= h($category['name']) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-
-        <label class="field">タグ（カンマ区切り）
-            <input type="text" name="tags" value="<?= h($_POST['tags'] ?? '') ?>" placeholder="例: PHP, MySQL, 雑記">
-            <p class="field-hint">未登録のタグ名は自動作成されます。</p>
-        </label>
-
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary">保存する</button>
-            <button type="submit" name="post_action" value="save_view" class="btn btn-secondary">保存して公開ページを表示 ↗</button>
-            <a class="btn-link" href="<?= SITE_URL ?>/admin/index.php">← 一覧へ戻る</a>
-        </div>
-    </form>
-</div>
-
-<?php
-$ckeditor_body = <<<HTML
-<script type="module">
-import {
-    ClassicEditor,
-    Essentials,
-    Bold, Italic, Underline, Strikethrough,
-    Heading,
-    Paragraph,
-    List,
-    Link,
-    BlockQuote,
-    Indent, IndentBlock,
-    SimpleUploadAdapter,
-    Image, ImageCaption, ImageStyle, ImageToolbar, ImageResize, ImageUpload,
-    Table, TableToolbar,
-} from 'ckeditor5';
-import 'ckeditor5/translations/ja.js';
-
-const editorConfig = {
-    plugins: [
-        Essentials, Bold, Italic, Underline, Strikethrough, Heading, Paragraph,
-        List, Link, BlockQuote, Indent, IndentBlock,
-        SimpleUploadAdapter, Table, TableToolbar,
-        Image, ImageCaption, ImageStyle, ImageToolbar, ImageResize, ImageUpload,
-    ],
-    toolbar: {
-        items: [
-            'heading', '|',
-            'bold', 'italic', 'underline', 'strikethrough', '|',
-            'bulletedList', 'numberedList', 'indent', 'outdent', '|',
-            'link', 'blockQuote', 'uploadImage', 'insertTable', '|',
-            'undo', 'redo',
-        ],
-        shouldNotGroupWhenFull: true,
-    },
-    simpleUpload: {
-        uploadUrl: '\${SITE_URL_JS}/admin/upload-image.php',
-        withCredentials: true,
-    },
-    image: {
-        toolbar: [
-            'imageStyle:inline', 'imageStyle:block', 'imageStyle:side', '|',
-            'toggleImageCaption', 'imageTextAlternative', '|',
-            'resizeImage',
-        ]
-    },
-    table: { contentToolbar: ['tableColumn', 'tableRow', 'mergeTableCells'] },
-    language: 'ja'
-};
-
-let bodyEditor = null;
-ClassicEditor.create(document.querySelector('.wysiwyg'), editorConfig)
-    .then(editor => { bodyEditor = editor; })
-    .catch(err => console.error(err));
-
-document.querySelector('form').addEventListener('submit', function() {
-    if (bodyEditor) {
-        document.querySelector('.wysiwyg').value = bodyEditor.getData();
-    }
-});
-</script>
-HTML;
-$ckeditor_body = str_replace('${SITE_URL_JS}', SITE_URL, $ckeditor_body);
-admin_footer($ckeditor_body);
-?>
+<?php admin_footer(post_form_script()); ?>

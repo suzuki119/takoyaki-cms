@@ -1,44 +1,49 @@
 # Takoyaki CMS
 
-PHP + MySQL で動作する、シンプルな自作CMSです。
-ブログや作品紹介サイトなど、記事＋カテゴリで成り立つ小規模サイトを想定しています。
+PHP + MySQL で動作する、**ポートフォリオサイト向けの自作CMS**です。
 
+**作品紹介（Works）** と **スキル紹介（Skills）** の2つを、管理画面から更新できるようにします。
 「PHPを学んだ人が読める / 改造できる」サイズ感を大切にしています。
-学習用途・改造用途を歓迎します。
+
+> **v2.0.0 で汎用CMSからポートフォリオCMSに方針転換しました。**
+> テーマ / プラグイン / RSS / ゴミ箱 / 複数ユーザーといった汎用機能を削り、
+> 作品メタ情報・セクション式の本文・スキル管理を実装しています。
+> v1.x からの移行は [migrations/v2.0.0.sql](migrations/v2.0.0.sql) を参照してください。
 
 ---
 
-## 主要ユースケース: 既存サイトへの組み込み
+## できること
 
-> **既存のWebサイトのデザインはそのまま、記事の追加・更新機能だけを足したい**
+### 作品（Works）
 
-これがこのCMSの最も得意な使い方です。専用ガイドを用意しています:
+- タイトル / slug / 概要 / サムネイル
+- **制作期間・種別・外部リンク・動画URL**（YouTube / Vimeo の埋め込みに対応）
+- **セクション式の本文** — 「見出し＋本文」を並べて詳細ページを構成
+- カテゴリ（複数選択可）／ 使用技術タグ
+- 下書き・予約公開・プレビュー
+- ↑↓ ボタンでの並び替え
 
-👉 **[EMBEDDING.md — 組み込みガイド](EMBEDDING.md)** （PHPサイトへの組み込み手順 / URL設計 / SEO / セキュリティ / トラブルシューティング）
+### スキル（Skills）
 
-CMS本体だけで公開ページまで作りたい場合は、`samples/` と `router.php` のサンプル実装を
-コピーしてカスタマイズしてください（このREADMEの後半 [フロントエンドについて](#フロントエンドについて) 参照）。
+- カテゴリ（プログラミング / デザイン / その他）ごとにグループ表示
+- スキル名 / アイコン画像 / 期間・習熟度 / 説明
+- カテゴリ内での並び替え
 
----
+### 共通
 
-## 特徴
-
-- PHP + MySQL のみ（依存ライブラリは CKEditor 5 のみ、CDN経由）
-- 記事の作成・編集・削除、サムネイル画像、CKEditor 5 によるリッチテキスト編集
-- 記事の slug / 抜粋 / 予約公開 / プレビュー
-- カテゴリ管理、記事との多対多紐付け
-- 画像の自動リサイズ・サムネイル変種生成、メディアライブラリ
-- 複数管理者（admin / editor ロール）、CSRF対策、ログイン試行回数制限
-- フロントエンド向けヘルパー関数 + サンプルテンプレート、RSS / sitemap.xml
-- 並び替え（↑↓ボタンで `sort_order` 入れ替え）
+- CKEditor 5 によるリッチテキスト編集（本文セクションごと）
+- 画像の自動リサイズ・サムネイル生成・メディアライブラリ
+- 管理者ログイン（1人構成）、CSRF対策、ログイン試行回数制限
+- そのまま動く公開ページのサンプル（`samples/`）
 
 ---
 
 ## 動作要件
 
-- PHP 7.4 以上（PHP 8 推奨）
+- PHP 8.0 以上（8.1+ 推奨）
 - MySQL 5.7 以上 または MariaDB 10.3 以上
 - Apache（mod_rewrite は不要）
+- GD 拡張（画像リサイズ用）
 - ローカル開発環境: MAMP / XAMPP / Laragon など
 
 ---
@@ -47,16 +52,12 @@ CMS本体だけで公開ページまで作りたい場合は、`samples/` と `r
 
 ### 1. ファイルを配置
 
-サーバーのドキュメントルート配下に clone してください。
-
 ```bash
 git clone https://github.com/<user>/takoyaki-cms.git
 cd takoyaki-cms
 ```
 
 ### 2. データベースを作成
-
-phpMyAdmin やコマンドラインで空のデータベースを作成します（文字コード `utf8mb4`）。
 
 ```sql
 CREATE DATABASE my_cms DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -70,15 +71,18 @@ mysql -u <user> -p my_cms < schema.sql
 
 ### 4. 設定ファイルを作成
 
-`config.example.php` をコピーして `config.php` を作成し、自分の環境に合わせて編集します。
-
 ```bash
 cp config.example.php config.php
 ```
 
 編集する項目：
-- `DB_HOST` / `DB_NAME` / `DB_USER` / `DB_PASS`
-- `SITE_URL`（このCMSを設置したURL、末尾スラッシュなし）
+
+| 定数 | 説明 |
+|------|------|
+| `DB_HOST` / `DB_NAME` / `DB_USER` / `DB_PASS` | DB接続情報 |
+| `SITE_URL` | このCMSを設置したURL（末尾スラッシュなし） |
+| `CMS_TIMEZONE` | タイムゾーン（既定 `Asia/Tokyo`） |
+| `SKILL_CATEGORIES` | スキルのカテゴリと表示順 |
 
 ### 5. アップロードディレクトリの権限設定
 
@@ -86,11 +90,11 @@ cp config.example.php config.php
 chmod 755 uploads
 ```
 
-Webサーバー（Apache等）から書き込めるようにします。
+`uploads/.htaccess` に PHP 実行を止める設定が入っています。削除しないでください。
 
 ### 6. 管理者ユーザーを登録
 
-ブラウザで `setup.php` にアクセスし、フォームから管理者を登録します。
+ブラウザで `setup.php` を開き、フォームから登録します。
 
 ```
 http://your-site/takoyaki-cms/setup.php
@@ -98,12 +102,11 @@ http://your-site/takoyaki-cms/setup.php
 
 ### 7. setup.php を削除する（重要）
 
-セキュリティ上、必ず削除してください。
-残しておくと、第三者が新しい管理者を上書き登録できる可能性があります。
-
 ```bash
 rm setup.php
 ```
+
+残すと第三者が管理者を登録できる可能性があります。
 
 ### 8. 管理画面にログイン
 
@@ -113,36 +116,60 @@ http://your-site/takoyaki-cms/login.php
 
 ---
 
+## v1.x からのアップグレード
+
+**破壊的変更を含みます。必ずバックアップを取ってから実行してください。**
+
+```bash
+mysqldump -u <user> -p <dbname> > backup-before-v2.sql
+mysql -u <user> -p <dbname> < migrations/v2.0.0.sql
+cp config.example.php config.php   # 設定ファイルも作り直す
+```
+
+移行の内容:
+
+| 変更 | 挙動 |
+|------|------|
+| `posts.body` → `post_sections` | 既存の本文が「見出しなしの1セクション」として移行されます |
+| ゴミ箱の廃止 | **ゴミ箱に入っていた記事は完全に削除されます** |
+| 作品メタの追加 | `period` / `type` / `external_url` / `video_url` が空で追加されます |
+| `sort_order` の採番 | v1.x では全て0で並び替えが機能していませんでした。id順に振り直します |
+| カテゴリ slug の正常化 | 数字だけの slug を `cat-{id}` に置き換えます（あとで管理画面から編集してください） |
+| ロールの廃止 | `users.role` を削除します。**複数ユーザーがいる場合、全員が管理者になります**。事前に整理してください |
+| テーブル削除 | `post_meta` / `audit_logs` / `password_resets` |
+
+---
+
 ## ディレクトリ構成
 
 ```
 takoyaki-cms/
-├── README.md
-├── CHANGELOG.md
-├── LICENSE
+├── README.md / CHANGELOG.md / EMBEDDING.md / TESTING.md
 ├── config.example.php   # 設定ファイルのテンプレート
 ├── schema.sql           # DBスキーマ（新規インストール用）
 ├── migrations/          # バージョンアップ用SQL
 ├── setup.php            # 管理者初回登録（使用後に削除）
-├── login.php            # ログイン画面
-├── logout.php           # ログアウト処理
-├── preview.php          # 記事プレビュー（ログイン必須）
-├── feed.php             # RSS 2.0 フィード
-├── sitemap.php          # sitemap.xml
+├── login.php / logout.php
+├── preview.php          # 作品プレビュー（ログイン必須）
 ├── admin/
-│   ├── index.php        # 記事一覧
-│   ├── post-new.php     # 記事新規作成
-│   ├── post-edit.php    # 記事編集
+│   ├── index.php        # 作品一覧
+│   ├── post-new.php     # 作品 新規作成
+│   ├── post-edit.php    # 作品 編集
+│   ├── _post-form.php   # 作品フォームの共通部品
+│   ├── skill.php        # スキル一覧
+│   ├── skill-edit.php   # スキル 新規/編集
 │   ├── categories.php   # カテゴリ管理
-│   ├── media.php        # メディアライブラリ（admin限定）
-│   ├── users.php        # ユーザー管理（admin限定）
-│   ├── user-edit.php    # ユーザー編集（admin限定）
-│   ├── account.php      # 自分のアカウント設定
-│   └── upload-image.php # 本文画像アップロード（CKEditor連携）
-├── samples/             # 公開ページのサンプルテンプレート
-│   ├── index.php        # 記事一覧
-│   ├── single.php       # 記事詳細
-│   └── category.php     # カテゴリ別一覧
+│   ├── tags.php         # タグ管理
+│   ├── media.php        # メディアライブラリ
+│   ├── settings.php     # サイト設定
+│   ├── account.php      # アカウント設定
+│   ├── upload-image.php # 本文画像アップロード（CKEditor連携）
+│   ├── _layout.php / admin.css
+├── samples/             # 公開ページのサンプル
+│   ├── works.php        # 作品一覧
+│   ├── single.php       # 作品詳細
+│   ├── skill.php        # スキル一覧
+│   ├── _layout.php / style.css
 └── uploads/             # 画像保存先（要書き込み権限）
 ```
 
@@ -152,90 +179,63 @@ takoyaki-cms/
 
 | テーブル | 役割 |
 |---------|------|
-| `posts` | 記事（タイトル / slug / 本文 / 抜粋 / サムネイル / ステータス / 公開日時 / 並び順 / 論理削除） |
+| `posts` | 作品（タイトル / slug / 概要 / サムネイル / 制作期間 / 種別 / 外部リンク / 動画URL / ステータス / 公開日時 / 並び順） |
+| `post_sections` | 作品詳細の本文セクション（見出し＋本文、1対多） |
+| `skills` | スキル（カテゴリ / 名前 / アイコン / 期間 / 説明 / 並び順） |
 | `categories` / `post_categories` | カテゴリと多対多 |
-| `tags` / `post_tags` | タグと多対多 |
-| `post_meta` | 記事のカスタムフィールド |
-| `users` | 管理者ユーザー（admin / editor） |
+| `tags` / `post_tags` | 使用技術タグと多対多 |
+| `users` | 管理者ユーザー（1人構成） |
 | `site_settings` | サイト設定（key-value） |
-| `audit_logs` | 操作監査ログ |
 | `login_attempts` | ログイン試行（レート制限用） |
-| `password_resets` | パスワードリセットトークン |
 
-詳細は `schema.sql` を参照してください。
+詳細は [schema.sql](schema.sql) を参照してください。
 
 ---
 
-## フロントエンドについて
+## 公開ページについて
 
-本CMSは **管理画面 + フロントエンド向けヘルパー** を提供します。実際の見た目は利用者が自由にデザイン・実装する設計です。
+本CMSは **管理画面 + フロントエンド向けヘルパー** を提供します。見た目は利用者が自由に実装する設計です。
 
-### サンプルテンプレート
+### サンプル
 
-`samples/` ディレクトリにそのまま動くサンプルがあります（コピー・改変してご利用ください）。
+`samples/` にそのまま動くサンプルがあります（コピー・改変してご利用ください）。
 
 | ファイル | 役割 |
 |---------|------|
-| `samples/index.php` | 記事一覧（最新10件） |
-| `samples/single.php` | 記事詳細（`?id=1` or `?slug=my-post`） |
-| `samples/category.php` | カテゴリ別一覧（`?id=1` or `?slug=blog`） |
+| `samples/works.php` | 作品一覧（カテゴリフィルター + ページ送り） |
+| `samples/single.php` | 作品詳細（`?slug=my-work` or `?id=1`） |
+| `samples/skill.php` | スキル一覧（カテゴリ別グリッド） |
 
-詳しくは [samples/README.md](samples/README.md) を参照してください。
+既存サイトへの組み込み方は **[EMBEDDING.md](EMBEDDING.md)** を参照してください。
 
 ### ヘルパー関数
 
-`config.php` を読み込むと次のヘルパーが使えます（公開中の記事のみが返ります）。
+`config.php` を読み込むと次のヘルパーが使えます（公開中の作品のみが返ります）。
 
 ```php
 require_once 'config.php';
 
-// 公開中の記事を取得（最新10件）
-$posts = get_posts([
-    'limit'    => 10,
-    'order_by' => 'published_at',
-    'order'    => 'DESC',
-]);
+// 作品
+$posts    = get_posts(['limit' => 12, 'category_id' => 3]);
+$post     = get_post('my-work');            // slug または ID
+$sections = get_post_sections($post['id']); // 本文セクション
 
-// 1件の記事を ID or slug で取得
-$post = get_post(1);          // ID
-$post = get_post('my-post');  // slug
+// 分類
+$categories = get_categories();
+$cats       = get_post_categories($post['id']);
+$tags       = get_post_tags($post['id']);
 
-// カテゴリ一覧、特定の記事に紐付くカテゴリ
-$categories      = get_categories();
-$post_categories = get_post_categories($post['id']);
+// スキル
+$skills  = get_skills();          // 表示順に並んだ配列
+$grouped = get_skills_grouped();  // ['プログラミング' => [...], ...]
 
-// サムネイルURL（thumb 変種があればそれ、なければ元画像）
-$url = post_thumb_url($post['thumbnail']);
+// URL・画像
+$url   = public_post_url($post);               // 公開ページURL
+$thumb = post_thumb_url($post['thumbnail']);   // サムネイルURL
+$embed = video_embed_url($post['video_url']);  // YouTube/Vimeo 埋め込みURL
 ```
 
-予約投稿は時刻が来るまで自動的に除外されます。
-
-### RSS フィード / サイトマップ
-
-- `feed.php` — RSS 2.0 形式で最新50件
-- `sitemap.php` — 検索エンジン向けXMLサイトマップ
-
-どちらも記事URLを利用者のサイトに合わせて変更する想定です（ファイル先頭のコールバックを編集）。
-
-### きれいなURL（任意）
-
-`/post/my-slug` のようなURLを使いたい場合、フロントコントローラ `router.php` と `.htaccess` を有効化します。
-
-```bash
-cp .htaccess.example .htaccess
-# .htaccess の RewriteBase を設置パスに合わせて編集
-```
-
-| URL | 表示内容 |
-|-----|---------|
-| `/` | 記事一覧（トップ） |
-| `/post/{slug}` | 記事詳細 |
-| `/category/{slug}` | カテゴリ別一覧 |
-| `/tag/{slug}` | タグ別一覧 |
-
-- 実ファイル（`admin/`, `login.php`, `uploads/` 等）はそのまま配信され、存在しないパスのみ `router.php` に渡されます
-- `mod_rewrite` が無効な環境でも `router.php?p=/post/my-slug` の形式で動作します
-- `router.php` は公開サイトの実装例です。デザインは自由に編集してください
+予約公開は時刻が来るまで自動的に除外されます。
 
 ---
 
@@ -243,12 +243,16 @@ cp .htaccess.example .htaccess
 
 このCMSは学習・小規模サイト向けです。本番運用は自己責任でお願いします。
 
-- **`setup.php` は使用後必ず削除** — 残すと第三者が管理者を上書きできます
-- **メール送信は `mail()` 依存** — パスワードリセット等。環境によっては別途SMTP設定が必要
+- **`setup.php` は使用後必ず削除** — 残すと第三者が管理者を登録できます
+- **管理者は1人構成** — 複数人での編集や権限分けはできません
+- **パスワードリセット機能はありません** — 忘れた場合は DB を直接書き換えてください
+- **本文HTMLはサニタイズしません** — 書き手＝管理者本人を信頼する前提の設計です。
+  管理画面の認証情報を他人に渡さないでください
 - **セキュリティ監査未実施** — 大規模・公開度の高いサイトには適しません
-- **REST API / コメント / 多言語化は未実装** — 必要なら拡張するか他CMSを検討してください
+- **REST API / コメント / 多言語化は未実装**
 
-実装済みのセキュリティ対策については [CHANGELOG.md](CHANGELOG.md) を参照してください。
+実装済みのセキュリティ対策と既知の課題は [CHANGELOG.md](CHANGELOG.md) と
+[EMBEDDING.md の付記](EMBEDDING.md) を参照してください。
 
 ---
 

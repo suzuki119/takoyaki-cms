@@ -1,52 +1,73 @@
 <?php
 // ===================================================
-//  サイト設定（admin限定）
+//  サイト設定
 // ===================================================
 require_once '../config.php';
 require_once __DIR__ . '/_layout.php';
-require_admin();
+require_login();
 
 $info = '';
 
-// 管理可能な設定キーのホワイトリスト
-// （※ テーマ切替は専用ページ admin/themes.php に分離しているのでここには無い）
+// 管理できる設定キーのホワイトリスト
 $editable_keys = [
-    'site_name'        => ['label' => 'サイト名',       'type' => 'text',     'hint' => 'samples/ テンプレートや feed.php で利用'],
-    'site_description' => ['label' => 'サイト説明',     'type' => 'text',     'hint' => 'RSS/sitemap や <meta description> で利用'],
-    'footer_text'      => ['label' => 'フッターテキスト', 'type' => 'text',     'hint' => 'samples/index.php のフッター等で利用（任意）'],
-    'posts_per_page'   => ['label' => '一覧表示件数',   'type' => 'number',   'hint' => 'samples/index.php の記事一覧で表示する件数'],
-    'public_site_url'  => ['label' => '公開サイトのURL', 'type' => 'text',     'hint' => '管理画面の「サイトを表示」リンクの飛び先。空なら samples/index.php へ。組み込み先のURLを入れておくと便利'],
-    'public_article_url_pattern' => ['label' => '公開記事URLのパターン', 'type' => 'text', 'hint' => '記事一覧/編集画面の「公開ページ ↗」リンクの形式。例: https://your-site.com/news/{slug} ／ {slug} と {id} が使えます。空なら samples/single.php?slug=... or ?id=... へ'],
+    'site_name' => [
+        'label' => 'サイト名',
+        'type'  => 'text',
+        'hint'  => 'samples/ のテンプレートで <title> などに使います',
+    ],
+    'site_description' => [
+        'label' => 'サイト説明',
+        'type'  => 'text',
+        'hint'  => '<meta name="description"> に使います',
+    ],
+    'footer_text' => [
+        'label' => 'フッターテキスト',
+        'type'  => 'text',
+        'hint'  => '公開ページのフッターに表示します（任意）',
+    ],
+    'posts_per_page' => [
+        'label' => '作品一覧の表示件数',
+        'type'  => 'number',
+        'hint'  => 'samples/works.php で1ページに表示する作品数',
+    ],
+    'public_site_url' => [
+        'label' => '公開サイトのURL',
+        'type'  => 'text',
+        'hint'  => '管理画面の「サイトを表示」の飛び先。空なら samples/works.php へ。既存サイトに組み込んでいる場合はそのURLを入れてください',
+    ],
+    'public_article_url_pattern' => [
+        'label' => '公開作品URLのパターン',
+        'type'  => 'text',
+        'hint'  => '一覧・編集画面の「公開ページ ↗」の形式。例: https://your-site.com/works/{slug} ／ {slug} と {id} が使えます。空なら samples/single.php へ',
+    ],
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
 
     $changed = [];
-    foreach ($editable_keys as $key => $_) {
-        $new = trim($_POST[$key] ?? '');
-        $old = get_setting($key, '');
-        if ($new !== $old) {
+    foreach ($editable_keys as $key => $meta) {
+        $new = trim((string)($_POST[$key] ?? ''));
+
+        if ($meta['type'] === 'number') {
+            $new = (string)max(1, (int)$new);
+        }
+
+        if ($new !== (string)get_setting($key, '')) {
             set_setting($key, $new);
-            $changed[] = $key;
+            $changed[] = $meta['label'];
         }
     }
 
-    if (!empty($changed)) {
-        log_action('setting.update', 'setting', null, '更新: ' . implode(', ', $changed));
-        $info = '設定を更新しました（' . count($changed) . ' 件）';
-    } else {
-        $info = '変更はありませんでした。';
-    }
-
-    // 静的キャッシュをリセットするため再読込
-    // 簡単のためページ全体をリロード扱いで続行
+    $info = !empty($changed)
+        ? '設定を更新しました（' . implode('・', $changed) . '）'
+        : '変更はありませんでした。';
 }
 
-// 設定を再取得（cache は static なので、上の set_setting 後の値もこの関数経由で読める）
+// set_setting() がキャッシュも更新するので、ここでは常に最新の値が読める
 $settings = [];
-foreach ($editable_keys as $key => $_) {
-    $settings[$key] = get_setting($key, '');
+foreach ($editable_keys as $key => $meta) {
+    $settings[$key] = (string)get_setting($key, '');
 }
 
 admin_header('サイト設定');
@@ -80,9 +101,9 @@ admin_header('サイト設定');
     </form>
 </div>
 
-<p style="font-size:.85rem; color:#6b7280; margin-top:24px;">
-    ※ これらの設定は DB の <code>site_settings</code> テーブルに保存され、フロントエンドの <code>samples/</code> テンプレート等から
-    <code>get_setting('キー名')</code> で参照できます。
+<p class="hint-note">
+    ※ これらの設定は DB の <code>site_settings</code> テーブルに保存され、
+    公開ページから <code>get_setting('キー名')</code> で参照できます。
 </p>
 
 <?php admin_footer(); ?>

@@ -7,6 +7,89 @@
 
 ---
 
+## [2.0.0] - 2026-07-28
+
+汎用CMSから **ポートフォリオCMS**（Works + Skills）へ方針転換した大型リリース。
+元となった `myportfolio/cms` の作品紹介・スキル紹介の機能を取り戻し、
+使われていなかった汎用機能を削除した。
+
+移行には `migrations/v2.0.0.sql` を使用すること（**破壊的変更あり・要バックアップ**）。
+
+### Added
+- **スキル管理** — `skills` テーブル + `admin/skill.php` / `admin/skill-edit.php`
+  - カテゴリ（`config.php` の `SKILL_CATEGORIES` で定義）ごとにグループ表示
+  - スキル名 / アイコン画像 / 期間・習熟度 / 説明 / カテゴリ内での並び替え
+  - ヘルパー: `get_skills()` / `get_skills_grouped()` / `get_skill($id)`
+- **セクション式の本文** — `post_sections` テーブル
+  - 「見出し＋本文」の組を並べて作品詳細を構成
+  - 追加・削除・↑↓での並び替えに対応（セクションごとに CKEditor 5）
+  - ヘルパー: `get_post_sections()` / `set_post_sections()`
+- **作品メタ情報** — `posts` に `period` / `type` / `external_url` / `video_url` を追加
+- **動画埋め込み** — `video_embed_url()` が YouTube / Vimeo のURLを iframe 用に変換。
+  動画がある場合はサムネイルより優先して表示する
+- カテゴリの**複数選択**（`set_post_categories()`）
+- カテゴリ・タグの**編集機能**（従来は追加と削除のみ）
+- メディアライブラリに「未使用画像の一括削除」
+- 公開ページのサンプルを刷新: `samples/works.php` / `single.php` / `skill.php` + `style.css`
+- `uploads/.htaccess` — uploads 配下での PHP 実行を禁止（多層防御）
+- ヘルパー: `unique_slug()` / `parse_datetime_local()` / `handle_image_upload()` / `delete_upload()` / `upload_url()`
+
+### Changed
+- 管理画面ナビを再構成。**カテゴリ管理と監査ログがメニューに無く到達できなかった問題**を解消
+  （監査ログ自体は廃止、カテゴリはナビに追加）
+- 画像アップロードの検証・保存を `handle_image_upload()` に集約（従来は3ファイルにコピペ）
+- 作品フォームを `admin/_post-form.php` に共通化（new / edit の重複を解消）
+- `h()` が null と数値を受け付けるように（PHP 8.1 の "Passing null" 警告を解消）
+- `config.php` と `config.example.php` のロジックを完全に同一化（従来は example 側にしか
+  PHPDoc が無く、二重管理になっていた）。PHP全体では 5,181行 → 4,718行
+- パスワード変更時に `session_regenerate_id()` を実行
+
+### Removed
+- **テーマ機構** — `themes/`, `admin/themes.php`, `theme_css_tag()` など
+- **プラグイン機構・フック・ショートコード** — `plugins/`, `admin/plugins.php`,
+  `add_action` / `do_action` / `add_filter` / `apply_filters` / `add_shortcode` / `do_shortcodes`
+- **RSS / sitemap / きれいなURL** — `feed.php`, `sitemap.php`, `router.php`, `.htaccess.example`
+- **監査ログ** — `audit_logs` テーブル, `admin/logs.php`, `log_action()`
+- **DBバックアップ画面** — `admin/backup.php`
+- **ゴミ箱（ソフトデリート）** — `posts.deleted_at`。削除は即時・完全削除になった
+- **複数ユーザーとロール** — `admin/users.php`, `admin/user-edit.php`, `users.role`,
+  `require_admin()`, `user_role()`。管理者1人構成に
+- **パスワードリセット** — `forgot-password.php`, `reset-password.php`,
+  `password_resets` テーブル, `send_email()`
+- **カスタムフィールド** — `post_meta` テーブル（専用カラムの追加により役割が消滅）
+- `posts.author_id`（1人構成のため）
+
+### Fixed
+- **記事編集画面の本文が未エスケープで、保存型XSSが成立していた問題**（重大）
+  本文に `</textarea><script>` を含めると、次に編集画面を開いた人のブラウザで
+  任意のJSが実行できた。セクション本文を `h()` でエスケープするよう修正
+- **並び替え（↑↓）が一度も機能していなかった問題** — 新規作成時に `sort_order` を
+  採番していなかったため全レコードが0で、隣接レコードを見つけられなかった。
+  作成時に `MAX(sort_order)+1` を採番し、同値だった場合は自動で振り直すようにした
+- **設定を保存しても画面に旧値が表示される問題** — `set_setting()` が
+  `get_setting()` の static キャッシュを更新していなかった
+- **カテゴリの slug に採番IDが入り、意味のあるURLを作れなかった問題**
+- **slug が重複すると保存できなかった問題** — `-2` / `-3` を自動付与するようにした。
+  日本語のみのタイトルは `work-{id}` にフォールバックする
+- **タイムゾーン未設定で予約公開の判定がずれる問題** — `date_default_timezone_set()` と
+  PDO接続時の `SET time_zone` を追加し、PHP と MySQL の判定基準をそろえた
+- **`published_at` が未検証のまま SQL に渡っていた問題** — `parse_datetime_local()` で検証
+- **作品を削除してもサムネイル画像が `uploads/` に残り続けた問題**
+- DB接続失敗時にホスト名・DB名・ユーザー名が画面に出力されていた問題（`error_log()` へ）
+- ログインフォームに CSRF トークンが無かった問題
+- `login_attempts` の古い行が無限に溜まっていた問題（ログイン成功時に1日以上前を掃除）
+- ページネーションが全ページ番号を出力していた問題（前後2ページ + 先頭/末尾に省略表示）
+- メディアライブラリの使用状況チェックが画像ごとにクエリを投げていた問題（N+1）
+
+### Security
+- `uploads/` での PHP 実行を `.htaccess` で禁止
+- アップロードのファイル名を `uniqid()` から `random_bytes()` ベースに変更（推測困難に）
+- `delete_upload()` が `realpath()` で uploads 配下かを検証してから削除する
+- スキルのカテゴリを `SKILL_CATEGORIES` のホワイトリストで検証
+- 作品の保存をトランザクション化（セクション・カテゴリ・タグの中途半端な保存を防止）
+
+---
+
 ## [1.13.0] - 2026-05-29
 
 ### Added

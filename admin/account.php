@@ -1,6 +1,7 @@
 <?php
 // ===================================================
-//  自分のアカウント設定（パスワード・メール変更）
+//  アカウント設定（ユーザー名・メール・パスワードの変更）
+//  v2.0.0 から管理者は1人構成なので、このページが唯一のユーザー管理画面。
 // ===================================================
 require_once '../config.php';
 require_once __DIR__ . '/_layout.php';
@@ -12,7 +13,7 @@ $info  = '';
 
 $id = (int)$_SESSION['user_id'];
 
-$stmt = $pdo->prepare('SELECT id, username, email, password, role FROM users WHERE id = :id LIMIT 1');
+$stmt = $pdo->prepare('SELECT id, username, email, password, created_at FROM users WHERE id = :id LIMIT 1');
 $stmt->execute([':id' => $id]);
 $user = $stmt->fetch();
 
@@ -24,10 +25,11 @@ if (!$user) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
 
-    $current_password  = $_POST['current_password'] ?? '';
-    $new_password      = $_POST['new_password'] ?? '';
-    $email             = trim($_POST['email'] ?? '');
-    $new_username      = trim($_POST['username'] ?? '');
+    $current_password = (string)($_POST['current_password'] ?? '');
+    $new_password     = (string)($_POST['new_password'] ?? '');
+    $email            = trim((string)($_POST['email'] ?? ''));
+    $new_username     = trim((string)($_POST['username'] ?? ''));
+
     $changing_password = ($new_password !== '');
     $changing_username = ($new_username !== $user['username']);
 
@@ -55,30 +57,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($error === '') {
-        $pdo->prepare('UPDATE users SET email = :e WHERE id = :id')
-            ->execute([':e' => $email, ':id' => $id]);
+    if ($error === '' && $email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = 'メールアドレスの形式が正しくありません。';
+    }
 
+    if ($error === '') {
         $messages = [];
 
+        $pdo->prepare('UPDATE users SET email = :e WHERE id = :id')
+            ->execute([':e' => $email !== '' ? $email : null, ':id' => $id]);
+        $messages[] = 'メール';
+
         if ($changing_username) {
-            $old_username = $user['username'];
             $pdo->prepare('UPDATE users SET username = :u WHERE id = :id')
                 ->execute([':u' => $new_username, ':id' => $id]);
             $_SESSION['username'] = $new_username;
-            log_action('user.rename', 'user', $id, "自分のユーザー名を変更: {$old_username} → {$new_username}");
-            $messages[] = 'ユーザー名';
+            $messages[]           = 'ユーザー名';
         }
 
         if ($changing_password) {
-            $hashed = password_hash($new_password, PASSWORD_DEFAULT);
             $pdo->prepare('UPDATE users SET password = :p WHERE id = :id')
-                ->execute([':p' => $hashed, ':id' => $id]);
-            log_action('user.change_password', 'user', $id, '自分のパスワードを変更');
+                ->execute([':p' => password_hash($new_password, PASSWORD_DEFAULT), ':id' => $id]);
+            // パスワードを変えたらセッションIDも作り直す
+            session_regenerate_id(true);
             $messages[] = 'パスワード';
         }
 
-        $messages[] = 'メール';
         $info = implode('・', $messages) . 'を更新しました。';
 
         $stmt->execute([':id' => $id]);
@@ -89,10 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 admin_header('アカウント設定');
 ?>
 
-<h1 class="page-title">アカウント設定</h1>
-<p class="page-meta">ロール:
-    <span class="badge badge-<?= h($user['role']) ?>"><?= h($user['role']) ?></span>
-</p>
+<h1 class="page-title">アカウント</h1>
+<p class="page-meta">登録日: <?= h(substr((string)$user['created_at'], 0, 10)) ?></p>
 
 <?php if ($error !== ''): ?>
     <div class="alert alert-error"><?= h($error) ?></div>
@@ -107,7 +109,6 @@ admin_header('アカウント設定');
 
         <label class="field">ユーザー名（ログイン名）
             <input type="text" name="username" value="<?= h($user['username']) ?>" required maxlength="50" autocomplete="username">
-            <p class="field-hint">変更すると次回ログインから新しい名前を使います。</p>
         </label>
 
         <label class="field">メールアドレス
@@ -131,6 +132,13 @@ admin_header('アカウント設定');
             <button type="submit" class="btn btn-primary">更新する</button>
         </div>
     </form>
+</div>
+
+<div class="alert alert-warning">
+    <strong>パスワードを忘れた場合：</strong>
+    v2.0.0 ではメールによるリセット機能を持ちません。
+    phpMyAdmin 等で <code>users</code> テーブルの <code>password</code> を
+    <code>password_hash()</code> で作ったハッシュに書き換えてください。
 </div>
 
 <?php admin_footer(); ?>

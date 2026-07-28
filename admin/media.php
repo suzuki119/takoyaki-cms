@@ -1,10 +1,11 @@
 <?php
 // ===================================================
-//  メディアライブラリ（admin限定）
+//  メディアライブラリ
+//  uploads/ の画像を一覧し、どこで使われているかを表示する。
 // ===================================================
 require_once '../config.php';
 require_once __DIR__ . '/_layout.php';
-require_admin();
+require_login();
 
 $pdo   = db();
 $error = '';
@@ -13,49 +14,79 @@ $info  = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['action'])) {
     verify_csrf();
 
+    // ---- 1件削除 ----
     if ($_POST['action'] === 'delete' && !empty($_POST['filename'])) {
         $filename = basename((string)$_POST['filename']);
-        $path     = UPLOAD_DIR . $filename;
 
-        $real_uploads = realpath(UPLOAD_DIR);
-        $real_target  = realpath($path);
-
-        if (!$real_target || strpos($real_target, $real_uploads) !== 0) {
+        if (!file_exists(UPLOAD_DIR . $filename)) {
             $error = 'ファイルが見つかりません。';
         } else {
-            @unlink($path);
-            @unlink(UPLOAD_DIR . thumb_filename($filename));
-            log_action('media.delete', 'media', null, "ファイル: {$filename}");
-            $info = h($filename) . ' を削除しました。';
+            delete_upload($filename);
+            $info = $filename . ' を削除しました。';
         }
+    }
+
+    // ---- 未使用をまとめて削除 ----
+    if ($_POST['action'] === 'purge_unused') {
+        $deleted = 0;
+        foreach (($_POST['unused'] ?? []) as $f) {
+            $filename = basename((string)$f);
+            if (file_exists(UPLOAD_DIR . $filename)) {
+                delete_upload($filename);
+                $deleted++;
+            }
+        }
+        $info = "未使用の画像を {$deleted} 件削除しました。";
     }
 }
 
+// ---------------------------------------------------
+//  使用状況をまとめて引く（画像ごとにクエリを投げない）
+// ---------------------------------------------------
+$usage = [];   // filename => [['type' => '作品', 'id' => 1, 'title' => '...'], ...]
+
+foreach ($pdo->query('SELECT id, title, thumbnail FROM posts WHERE thumbnail IS NOT NULL') as $row) {
+    $usage[$row['thumbnail']][] = ['type' => '作品', 'id' => (int)$row['id'], 'title' => $row['title']];
+}
+foreach ($pdo->query('SELECT id, title, image FROM skills WHERE image IS NOT NULL') as $row) {
+    $usage[$row['image']][] = ['type' => 'スキル', 'id' => (int)$row['id'], 'title' => $row['title']];
+}
+
+// 本文セクション内で参照されている画像も「使用中」として扱う
+$section_bodies = $pdo->query('SELECT body FROM post_sections WHERE body IS NOT NULL')
+                      ->fetchAll(PDO::FETCH_COLUMN);
+$body_blob = implode("\n", $section_bodies);
+
+// ---------------------------------------------------
+//  ファイル一覧
+// ---------------------------------------------------
 $files = [];
 foreach (scandir(UPLOAD_DIR) as $f) {
-    if ($f === '.' || $f === '..' || $f === '.gitkeep') continue;
+    if ($f === '.' || $f === '..' || $f === '.gitkeep' || $f === '.htaccess') continue;
     if (preg_match('/-thumb\.[^.]+$/', $f)) continue;
     if (!preg_match('/\.(jpe?g|png|gif|webp)$/i', $f)) continue;
 
     $path = UPLOAD_DIR . $f;
-    $size = @filesize($path);
     $dim  = @getimagesize($path);
 
-    $usage_stmt = $pdo->prepare('SELECT id, title FROM posts WHERE thumbnail = :f');
-    $usage_stmt->execute([':f' => $f]);
-    $usage = $usage_stmt->fetchAll();
+    $used = $usage[$f] ?? [];
+    if (empty($used) && $body_blob !== '' && strpos($body_blob, $f) !== false) {
+        $used[] = ['type' => '本文', 'id' => 0, 'title' => '作品の本文セクション'];
+    }
 
     $files[] = [
         'name'  => $f,
-        'size'  => $size,
+        'size'  => (int)@filesize($path),
         'w'     => $dim[0] ?? null,
         'h'     => $dim[1] ?? null,
-        'mtime' => @filemtime($path),
-        'usage' => $usage,
+        'mtime' => (int)@filemtime($path),
+        'usage' => $used,
     ];
 }
 
 usort($files, fn($a, $b) => $b['mtime'] <=> $a['mtime']);
+
+$unused = array_values(array_filter($files, fn($f) => empty($f['usage'])));
 
 function format_bytes(int $bytes): string
 {
@@ -67,57 +98,70 @@ function format_bytes(int $bytes): string
 admin_header('メディアライブラリ');
 ?>
 
-<h1 class="page-title">メディアライブラリ</h1>
+<h1 class="page-title">メディア</h1>
 
 <?php if ($error !== ''): ?>
     <div class="alert alert-error"><?= h($error) ?></div>
 <?php endif; ?>
 <?php if ($info !== ''): ?>
-    <div class="alert alert-info"><?= $info ?></div>
+    <div class="alert alert-info"><?= h($info) ?></div>
 <?php endif; ?>
 
 <?php if (empty($files)): ?>
     <p class="empty-state">アップロードされた画像がまだありません。</p>
 <?php else: ?>
-    <p style="font-size:.9rem; color:#6b7280; margin-bottom:20px;">
-        計 <?= count($files) ?> 件。記事に使われている画像も削除できますが、その記事のサムネイル参照が壊れます。
-    </p>
+    <div class="page-header">
+        <p class="page-meta" style="margin:0;">
+            計 <?= count($files) ?> 件（うち未使用 <?= count($unused) ?> 件）。
+            使用中の画像を削除すると、その参照が壊れます。
+        </p>
+        <?php if (!empty($unused)): ?>
+            <form method="post"
+                  onsubmit="return confirm('未使用の <?= count($unused) ?> 件を削除しますか？\n元に戻せません。');">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="purge_unused">
+                <?php foreach ($unused as $f): ?>
+                    <input type="hidden" name="unused[]" value="<?= h($f['name']) ?>">
+                <?php endforeach; ?>
+                <button type="submit" class="btn btn-secondary btn-sm">
+                    未使用 <?= count($unused) ?> 件をまとめて削除
+                </button>
+            </form>
+        <?php endif; ?>
+    </div>
+
     <div class="media-grid">
-        <?php foreach ($files as $f):
-            $thumb = thumb_filename($f['name']);
-            $thumb_url = file_exists(UPLOAD_DIR . $thumb)
-                ? UPLOAD_URL . $thumb
-                : UPLOAD_URL . $f['name'];
-        ?>
+        <?php foreach ($files as $f): ?>
         <div class="media-card">
             <div class="media-thumb">
-                <a href="<?= UPLOAD_URL . h($f['name']) ?>" target="_blank">
-                    <img src="<?= h($thumb_url) ?>" alt="">
+                <a href="<?= h(upload_url($f['name'])) ?>" target="_blank" rel="noopener">
+                    <img src="<?= h(post_thumb_url($f['name'])) ?>" alt="">
                 </a>
             </div>
             <div class="media-meta">
                 <div class="filename"><?= h($f['name']) ?></div>
                 <div>
-                    <?php if ($f['w'] && $f['h']): ?>
-                        <?= h($f['w']) ?>×<?= h($f['h']) ?>px
-                    <?php endif; ?>
-                    ／ <?= h(format_bytes((int)$f['size'])) ?>
+                    <?php if ($f['w'] && $f['h']): ?><?= h($f['w']) ?>×<?= h($f['h']) ?>px ／ <?php endif; ?>
+                    <?= h(format_bytes($f['size'])) ?>
                 </div>
                 <div class="usage <?= !empty($f['usage']) ? 'used' : '' ?>">
                     <?php if (!empty($f['usage'])): ?>
-                        使用中: <?= count($f['usage']) ?> 件の記事
+                        <?php foreach ($f['usage'] as $u): ?>
+                            <div><?= h($u['type']) ?>: <?= h($u['title']) ?></div>
+                        <?php endforeach; ?>
                     <?php else: ?>
                         未使用
                     <?php endif; ?>
                 </div>
             </div>
             <div class="media-card-actions">
-                <a href="<?= UPLOAD_URL . h($f['name']) ?>" target="_blank">原寸を開く</a>
-                <form method="post" onsubmit="return confirm('「<?= h($f['name']) ?>」を削除しますか？\nサムネイル変種も一緒に削除されます。');">
+                <a href="<?= h(upload_url($f['name'])) ?>" target="_blank" rel="noopener">原寸を開く</a>
+                <form method="post"
+                      onsubmit="return confirm('「<?= h($f['name']) ?>」を削除しますか？\nサムネイル変種も一緒に削除されます。');">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="filename" value="<?= h($f['name']) ?>">
-                    <button type="submit" class="btn-link" style="color:#dc2626;border:none;background:none;cursor:pointer;font-size:.82rem;padding:0;">削除</button>
+                    <button type="submit" class="btn-link btn-danger">削除</button>
                 </form>
             </div>
         </div>

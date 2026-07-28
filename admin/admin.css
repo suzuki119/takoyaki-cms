@@ -252,10 +252,17 @@ a:hover { color: #1d4ed8; }
     .pagination { flex-wrap: wrap; }
     .pagination a, .pagination span { padding: 8px 12px; font-size: .85rem; }
 
-    /* --- post-edit.php の meta-row（インラインstyle上書き） --- */
-    .meta-row { flex-direction: column !important; gap: 6px !important; }
-    .meta-row input { width: 100% !important; }
-    .meta-row button { width: 100%; }
+    /* --- 本文セクション（post-new / post-edit） --- */
+    .section-row-head { flex-wrap: wrap; }
+    .section-title-input { width: 100%; order: 3; }
+    .section-row-actions { margin-left: auto; }
+
+    /* --- 2カラムのフォーム行 --- */
+    .field-row { flex-direction: column !important; gap: 0 !important; }
+
+    /* --- インラインフォーム --- */
+    .inline-form { flex-direction: column; align-items: stretch; }
+    .inline-form .btn { width: 100%; }
 
     /* --- サムネプレビュー --- */
     .thumbnail-preview img { max-width: 100%; }
@@ -266,3 +273,62 @@ a:hover { color: #1d4ed8; }
     .topnav-brand { font-size: .95rem; }
     .main { padding: 12px 10px 32px; }
 }
+
+/* ===================================================
+   v2.0.0 で追加した部品
+   =================================================== */
+
+/* --- ナビの現在地 --- */
+.topnav-links a.is-current { background: #374151; color: #fff; }
+
+/* --- 表の中の補助テキスト --- */
+.row-sub { color: #6b7280; font-size: .8rem; }
+.hint-note { color: #6b7280; font-size: .85rem; margin-top: 24px; }
+
+/* --- テキストとして使う削除ボタン --- */
+.btn-link.btn-danger { background: none; color: #dc2626; padding: 0; border: none; cursor: pointer; font-size: .85rem; }
+.btn-link.btn-danger:hover { background: none; color: #b91c1c; text-decoration: underline; }
+
+/* --- 横並びの入力行 --- */
+.field-row { display: flex; gap: 16px; }
+.field-row > .field { flex: 1; }
+
+.inline-form { display: flex; gap: 8px; align-items: flex-end; }
+.inline-form input[type="text"] {
+    padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 4px;
+    font-size: 1rem; font-family: inherit;
+}
+
+/* --- カテゴリのチェックボックス群 --- */
+.checkbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-top: 8px; }
+.checkbox-item { display: flex; align-items: center; gap: 8px; font-weight: normal; font-size: .9rem; color: #374151; }
+.checkbox-item input { margin: 0; }
+
+/* --- 本文セクションの編集行 --- */
+.section-row {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 14px 16px 16px;
+    margin-top: 14px;
+    background: #fcfcfd;
+}
+.section-row-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.section-row-num {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    background: #1f2937; color: #fff;
+    border-radius: 50%; font-size: .78rem; font-weight: 600;
+}
+.section-title-input {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: .95rem;
+    font-family: inherit;
+}
+.section-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* --- スキルのアイコン --- */
+.skill-icon { width: 40px; height: 40px; object-fit: contain; border-radius: 6px; background: #f3f4f6; }

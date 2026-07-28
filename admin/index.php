@@ -1,6 +1,6 @@
 <?php
 // ===================================================
-//  管理画面 トップ（記事一覧 + ゴミ箱）
+//  管理画面トップ（作品一覧）
 // ===================================================
 require_once '../config.php';
 require_once __DIR__ . '/_layout.php';
@@ -8,104 +8,103 @@ require_login();
 
 const POSTS_PER_PAGE = 20;
 
-$pdo  = db();
-$view = ($_GET['view'] ?? '') === 'trash' ? 'trash' : 'normal';
+$pdo      = db();
+$redirect = SITE_URL . '/admin/index.php';
 
-// アクション後のリダイレクト先（ビューを維持）
-$redirect = SITE_URL . '/admin/index.php' . ($view === 'trash' ? '?view=trash' : '');
-
-// ===================================================
-//  一括操作（削除 / 復元 / 完全削除）
-// ===================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['bulk_action'])) {
-    verify_csrf();
-    $action = $_POST['bulk_action'];
-    $ids    = $_POST['ids'] ?? [];
-
-    if (is_array($ids) && !empty($ids)) {
-        $ids = array_values(array_filter(array_map('intval', $ids)));
-        if (!empty($ids)) {
-            $placeholders = implode(',', array_fill(0, count($ids), '?'));
-
-            if ($action === 'delete') {
-                $pdo->prepare("UPDATE posts SET deleted_at = NOW() WHERE id IN ($placeholders)")->execute($ids);
-                log_action('post.bulk_trash', 'post', null, 'ゴミ箱へ: ' . implode(',', $ids));
-            } elseif ($action === 'restore') {
-                $pdo->prepare("UPDATE posts SET deleted_at = NULL WHERE id IN ($placeholders)")->execute($ids);
-                log_action('post.bulk_restore', 'post', null, '復元: ' . implode(',', $ids));
-            } elseif ($action === 'purge') {
-                $pdo->prepare("DELETE FROM posts WHERE id IN ($placeholders)")->execute($ids);
-                log_action('post.bulk_delete', 'post', null, '完全削除: ' . implode(',', $ids));
-                foreach ($ids as $pid) {
-                    do_action('post.delete', $pid);
-                }
-            }
-        }
+/**
+ * sort_order を 1..N に振り直す。
+ * 同値が混ざって並び替えが効かなくなるのを防ぐための保険。
+ */
+function resequence_posts(PDO $pdo): void
+{
+    $ids = $pdo->query('SELECT id FROM posts ORDER BY sort_order ASC, id ASC')
+               ->fetchAll(PDO::FETCH_COLUMN);
+    $upd = $pdo->prepare('UPDATE posts SET sort_order = :o WHERE id = :id');
+    foreach ($ids as $i => $id) {
+        $upd->execute([':o' => $i + 1, ':id' => $id]);
     }
-    header('Location: ' . $redirect);
-    exit;
+}
+
+/**
+ * 作品を1件削除する（サムネイル画像も一緒に消す）。
+ * post_sections / post_categories / post_tags は外部キーの CASCADE で消える。
+ */
+function delete_post(PDO $pdo, int $id): void
+{
+    $stmt = $pdo->prepare('SELECT thumbnail FROM posts WHERE id = :id LIMIT 1');
+    $stmt->execute([':id' => $id]);
+    $row = $stmt->fetch();
+
+    $pdo->prepare('DELETE FROM posts WHERE id = :id')->execute([':id' => $id]);
+
+    if ($row && !empty($row['thumbnail'])) {
+        delete_upload($row['thumbnail']);
+    }
 }
 
 // ===================================================
-//  単一操作
+//  削除（単体 / 一括）
 // ===================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['delete_id'])) {
     verify_csrf();
-    $delete_id = (int)$_POST['delete_id'];
-    // 通常ビュー → ゴミ箱へ（ソフトデリート）
-    $pdo->prepare('UPDATE posts SET deleted_at = NOW() WHERE id = :id')->execute([':id' => $delete_id]);
-    log_action('post.trash', 'post', $delete_id);
+    delete_post($pdo, (int)$_POST['delete_id']);
     header('Location: ' . $redirect);
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['restore_id'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['bulk_action'] ?? '') === 'delete') {
     verify_csrf();
-    $restore_id = (int)$_POST['restore_id'];
-    $pdo->prepare('UPDATE posts SET deleted_at = NULL WHERE id = :id')->execute([':id' => $restore_id]);
-    log_action('post.restore', 'post', $restore_id);
-    header('Location: ' . $redirect);
-    exit;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['purge_id'])) {
-    verify_csrf();
-    $purge_id = (int)$_POST['purge_id'];
-    $pdo->prepare('DELETE FROM posts WHERE id = :id')->execute([':id' => $purge_id]);
-    log_action('post.delete', 'post', $purge_id);
-    do_action('post.delete', $purge_id);
+    $ids = is_array($_POST['ids'] ?? null) ? $_POST['ids'] : [];
+    foreach (array_filter(array_map('intval', $ids)) as $id) {
+        delete_post($pdo, $id);
+    }
     header('Location: ' . $redirect);
     exit;
 }
 
 // ===================================================
-//  並び替え（↑↓）— 通常ビューのみ
+//  並び替え（↑↓）
 // ===================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['move_id'])) {
     verify_csrf();
-    $move_id   = (int)$_POST['move_id'];
-    $direction = $_POST['direction'] ?? '';
+    $move_id = (int)$_POST['move_id'];
+    $up      = ($_POST['direction'] ?? '') === 'up';
 
-    $stmt_cur = $pdo->prepare('SELECT id, sort_order FROM posts WHERE id = :id');
-    $stmt_cur->execute([':id' => $move_id]);
-    $current = $stmt_cur->fetch();
+    $cur_stmt = $pdo->prepare('SELECT id, sort_order FROM posts WHERE id = :id LIMIT 1');
+    $cur_stmt->execute([':id' => $move_id]);
+    $current = $cur_stmt->fetch();
 
     if ($current) {
-        $stmt_nb = $direction === 'up'
-            ? $pdo->prepare('SELECT id, sort_order FROM posts WHERE sort_order < :order AND deleted_at IS NULL ORDER BY sort_order DESC LIMIT 1')
-            : $pdo->prepare('SELECT id, sort_order FROM posts WHERE sort_order > :order AND deleted_at IS NULL ORDER BY sort_order ASC LIMIT 1');
-        $stmt_nb->execute([':order' => $current['sort_order']]);
-        $neighbor = $stmt_nb->fetch();
+        // (sort_order, id) の組で「ひとつ前 / ひとつ後ろ」を探す
+        $sql = $up
+            ? 'SELECT id, sort_order FROM posts
+                WHERE sort_order < :o OR (sort_order = :o2 AND id < :id)
+                ORDER BY sort_order DESC, id DESC LIMIT 1'
+            : 'SELECT id, sort_order FROM posts
+                WHERE sort_order > :o OR (sort_order = :o2 AND id > :id)
+                ORDER BY sort_order ASC, id ASC LIMIT 1';
+
+        $nb_stmt = $pdo->prepare($sql);
+        $nb_stmt->execute([
+            ':o'  => $current['sort_order'],
+            ':o2' => $current['sort_order'],
+            ':id' => $current['id'],
+        ]);
+        $neighbor = $nb_stmt->fetch();
 
         if ($neighbor) {
-            $pdo->prepare('UPDATE posts SET sort_order = :order WHERE id = :id')
-                ->execute([':order' => $neighbor['sort_order'], ':id' => $current['id']]);
-            $pdo->prepare('UPDATE posts SET sort_order = :order WHERE id = :id')
-                ->execute([':order' => $current['sort_order'], ':id' => $neighbor['id']]);
+            if ((int)$neighbor['sort_order'] === (int)$current['sort_order']) {
+                // 同値で並んでいると入れ替えられないので、一度振り直してからやり直す
+                resequence_posts($pdo);
+            } else {
+                $upd = $pdo->prepare('UPDATE posts SET sort_order = :o WHERE id = :id');
+                $upd->execute([':o' => $neighbor['sort_order'], ':id' => $current['id']]);
+                $upd->execute([':o' => $current['sort_order'],  ':id' => $neighbor['id']]);
+            }
         }
     }
 
-    header('Location: ' . $redirect);
+    header('Location: ' . $redirect . (!empty($_POST['page']) ? '?page=' . (int)$_POST['page'] : ''));
     exit;
 }
 
@@ -115,29 +114,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['move_id'])) {
 $q    = trim($_GET['q'] ?? '');
 $page = max(1, (int)($_GET['page'] ?? 1));
 
-$where  = [$view === 'trash' ? 'deleted_at IS NOT NULL' : 'deleted_at IS NULL'];
+$where  = [];
 $params = [];
 if ($q !== '') {
-    $where[]      = '(title LIKE :q OR body LIKE :q)';
+    $where[]      = '(p.title LIKE :q OR p.period LIKE :q OR p.type LIKE :q)';
     $params[':q'] = '%' . $q . '%';
 }
-$where_sql = 'WHERE ' . implode(' AND ', $where);
+$where_sql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
-// ゴミ箱の件数（タブ表示用）
-$trash_count = (int)$pdo->query('SELECT COUNT(*) FROM posts WHERE deleted_at IS NOT NULL')->fetchColumn();
-
-$count_stmt = $pdo->prepare("SELECT COUNT(*) FROM posts $where_sql");
+$count_stmt = $pdo->prepare("SELECT COUNT(*) FROM posts p $where_sql");
 $count_stmt->execute($params);
 $total       = (int)$count_stmt->fetchColumn();
 $total_pages = max(1, (int)ceil($total / POSTS_PER_PAGE));
 $page        = min($page, $total_pages);
 $offset      = ($page - 1) * POSTS_PER_PAGE;
 
-$sql = "SELECT *,
-               (status = 'published' AND (published_at IS NULL OR published_at <= NOW())) AS is_live
-          FROM posts
+$sql = "SELECT p.*,
+               (p.status = 'published' AND (p.published_at IS NULL OR p.published_at <= NOW())) AS is_live,
+               (SELECT COUNT(*) FROM post_sections s WHERE s.post_id = p.id) AS section_count
+          FROM posts p
           $where_sql
-          ORDER BY sort_order ASC
+          ORDER BY p.sort_order ASC, p.id ASC
           LIMIT :limit OFFSET :offset";
 $stmt = $pdo->prepare($sql);
 foreach ($params as $k => $v) {
@@ -148,44 +145,33 @@ $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
 $stmt->execute();
 $posts = $stmt->fetchAll();
 
-admin_header($view === 'trash' ? 'ゴミ箱' : '記事一覧');
+// 並び替えは「全件を素の順序で見ている」ときだけ許可する
+$sortable = ($q === '');
+
+admin_header('作品一覧');
 ?>
 
 <div class="page-header">
-    <h1 class="page-title"><?= $view === 'trash' ? 'ゴミ箱' : '記事一覧' ?></h1>
+    <h1 class="page-title">作品</h1>
     <div class="page-actions">
-        <?php if ($view === 'trash'): ?>
-            <a class="btn btn-secondary" href="<?= SITE_URL ?>/admin/index.php">← 記事一覧へ</a>
-        <?php else: ?>
-            <a class="btn btn-primary" href="<?= SITE_URL ?>/admin/post-new.php">+ 新規作成</a>
-            <a class="btn btn-secondary" href="<?= SITE_URL ?>/admin/index.php?view=trash">ゴミ箱 (<?= $trash_count ?>)</a>
-        <?php endif; ?>
+        <a class="btn btn-primary" href="<?= SITE_URL ?>/admin/post-new.php">+ 新規作成</a>
     </div>
 </div>
 
 <form class="search-form" method="get" action="<?= SITE_URL ?>/admin/index.php">
-    <?php if ($view === 'trash'): ?><input type="hidden" name="view" value="trash"><?php endif; ?>
-    <input type="search" name="q" value="<?= h($q) ?>" placeholder="タイトル・本文で検索">
+    <input type="search" name="q" value="<?= h($q) ?>" placeholder="タイトル・制作期間・種別で検索">
     <button class="btn btn-secondary" type="submit">検索</button>
     <?php if ($q !== ''): ?>
-        <a class="btn btn-link" href="<?= SITE_URL ?>/admin/index.php<?= $view === 'trash' ? '?view=trash' : '' ?>">クリア</a>
+        <a class="btn btn-link" href="<?= SITE_URL ?>/admin/index.php">クリア</a>
     <?php endif; ?>
     <span class="search-meta">
-        <?php if ($q !== ''): ?>
-            「<?= h($q) ?>」で <?= $total ?> 件
-        <?php else: ?>
-            計 <?= $total ?> 件
-        <?php endif; ?>
+        <?= $q !== '' ? '「' . h($q) . '」で ' . $total . ' 件' : '計 ' . $total . ' 件' ?>
     </span>
 </form>
 
 <?php if (empty($posts)): ?>
     <p class="empty-state">
-        <?php if ($view === 'trash'): ?>
-            ゴミ箱は空です。
-        <?php else: ?>
-            <?= $q !== '' ? '該当する記事はありません。' : '記事がまだありません。' ?>
-        <?php endif; ?>
+        <?= $q !== '' ? '該当する作品はありません。' : '作品がまだありません。「+ 新規作成」から追加してください。' ?>
     </p>
 <?php else: ?>
     <form method="post" onsubmit="return confirmBulk(this);">
@@ -193,87 +179,77 @@ admin_header($view === 'trash' ? 'ゴミ箱' : '記事一覧');
         <div class="bulk-bar">
             <select name="bulk_action">
                 <option value="">一括操作</option>
-                <?php if ($view === 'trash'): ?>
-                    <option value="restore">復元</option>
-                    <option value="purge">完全に削除</option>
-                <?php else: ?>
-                    <option value="delete">ゴミ箱へ移動</option>
-                <?php endif; ?>
+                <option value="delete">削除する</option>
             </select>
             <button type="submit" class="btn btn-secondary btn-sm">適用</button>
             <span class="count"><span id="selected-count">0</span> 件選択中</span>
         </div>
+
         <table class="table with-bulk">
             <thead>
                 <tr>
                     <th style="width:32px;"><input type="checkbox" id="check-all"></th>
-                    <?php if ($view === 'normal'): ?><th style="width:64px;">順番</th><?php endif; ?>
+                    <?php if ($sortable): ?><th style="width:64px;">順番</th><?php endif; ?>
                     <th>タイトル</th>
-                    <th style="width:140px;"><?= $view === 'trash' ? '削除日時' : '公開状態' ?></th>
-                    <th style="width:220px;">操作</th>
+                    <th style="width:150px;">制作期間 / 種別</th>
+                    <th style="width:130px;">公開状態</th>
+                    <th style="width:230px;">操作</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($posts as $i => $post): ?>
                 <tr>
                     <td><input type="checkbox" name="ids[]" value="<?= h($post['id']) ?>" class="row-check"></td>
-                    <?php if ($view === 'normal'): ?>
+
+                    <?php if ($sortable): ?>
                     <td>
-                        <?php if ($i > 0 && $q === ''): ?>
-                            <form method="post" style="display:inline;">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="move_id" value="<?= h($post['id']) ?>">
-                                <input type="hidden" name="direction" value="up">
-                                <button type="submit" class="sort-btn">↑</button>
-                            </form>
+                        <?php if (!($page === 1 && $i === 0)): ?>
+                            <button type="submit" class="sort-btn" form="move-up-<?= h($post['id']) ?>">↑</button>
                         <?php endif; ?>
-                        <?php if ($i < count($posts) - 1 && $q === ''): ?>
-                            <form method="post" style="display:inline;">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="move_id" value="<?= h($post['id']) ?>">
-                                <input type="hidden" name="direction" value="down">
-                                <button type="submit" class="sort-btn">↓</button>
-                            </form>
+                        <?php if (!($page === $total_pages && $i === count($posts) - 1)): ?>
+                            <button type="submit" class="sort-btn" form="move-down-<?= h($post['id']) ?>">↓</button>
                         <?php endif; ?>
                     </td>
                     <?php endif; ?>
-                    <td><?= h($post['title']) ?></td>
+
                     <td>
-                        <?php if ($view === 'trash'): ?>
-                            <span style="font-size:.8rem;color:#888;"><?= h($post['deleted_at']) ?></span>
-                        <?php elseif ($post['status'] === 'published' && $post['is_live']): ?>
+                        <a href="<?= SITE_URL ?>/admin/post-edit.php?id=<?= h($post['id']) ?>"><?= h($post['title']) ?></a>
+                        <div class="row-sub">
+                            <?= (int)$post['section_count'] ?> セクション
+                            <?php if (!empty($post['video_url'])): ?> ／ 動画あり<?php endif; ?>
+                            <?php if (!empty($post['external_url'])): ?> ／ 外部リンクあり<?php endif; ?>
+                        </div>
+                    </td>
+
+                    <td class="row-sub">
+                        <?= h($post['period'] ?? '') ?>
+                        <?php if (!empty($post['type'])): ?>
+                            <div><?= h($post['type']) ?></div>
+                        <?php endif; ?>
+                    </td>
+
+                    <td>
+                        <?php if ($post['status'] === 'published' && $post['is_live']): ?>
                             <span class="badge badge-published">公開中</span>
                         <?php elseif ($post['status'] === 'published'): ?>
                             <span class="badge badge-scheduled">予約</span>
-                            <div style="font-size:.75rem;color:#888;margin-top:2px;"><?= h($post['published_at']) ?></div>
+                            <div class="row-sub"><?= h($post['published_at']) ?></div>
                         <?php else: ?>
                             <span class="badge badge-draft">下書き</span>
                         <?php endif; ?>
                     </td>
+
                     <td class="actions">
-                        <?php if ($view === 'trash'): ?>
-                            <form method="post" style="display:inline;">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="restore_id" value="<?= h($post['id']) ?>">
-                                <button type="submit" class="btn-link" style="border:none;background:none;cursor:pointer;font-size:.85rem;padding:0;">復元</button>
-                            </form>
-                            <form method="post" style="display:inline;" onsubmit="return confirm('完全に削除しますか？この操作は元に戻せません。');">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="purge_id" value="<?= h($post['id']) ?>">
-                                <button type="submit" class="btn-link" style="color:#dc2626;border:none;background:none;cursor:pointer;font-size:.85rem;padding:0;">完全に削除</button>
-                            </form>
-                        <?php else: ?>
-                            <a href="<?= SITE_URL ?>/admin/post-edit.php?id=<?= h($post['id']) ?>">編集</a>
-                            <a href="<?= SITE_URL ?>/preview.php?id=<?= h($post['id']) ?>" target="_blank">プレビュー</a>
-                            <?php if ($post['is_live']): ?>
-                                <a href="<?= h(public_post_url($post)) ?>" target="_blank" rel="noopener">公開ページ ↗</a>
-                            <?php endif; ?>
-                            <form method="post" style="display:inline;" onsubmit="return confirm('この記事をゴミ箱に移動しますか？');">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="delete_id" value="<?= h($post['id']) ?>">
-                                <button type="submit" class="btn-link" style="color:#dc2626;border:none;background:none;cursor:pointer;font-size:.85rem;padding:0;">ゴミ箱へ</button>
-                            </form>
+                        <a href="<?= SITE_URL ?>/admin/post-edit.php?id=<?= h($post['id']) ?>">編集</a>
+                        <a href="<?= SITE_URL ?>/preview.php?id=<?= h($post['id']) ?>" target="_blank">プレビュー</a>
+                        <?php if ($post['is_live']): ?>
+                            <a href="<?= h(public_post_url($post)) ?>" target="_blank" rel="noopener">公開ページ ↗</a>
                         <?php endif; ?>
+                        <button type="submit" class="btn-link btn-danger"
+                                form="delete-<?= h($post['id']) ?>"
+                                onclick="return confirm('「<?= h($post['title']) ?>」を削除しますか？\n本文セクションとサムネイル画像も削除され、元に戻せません。');">
+                            削除
+                        </button>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -281,10 +257,35 @@ admin_header($view === 'trash' ? 'ゴミ箱' : '記事一覧');
         </table>
     </form>
 
+    <?php // 一括操作フォームの中にフォームは入れられないので、行ごとのフォームは外に出しておく ?>
+    <?php foreach ($posts as $post): ?>
+        <form id="delete-<?= h($post['id']) ?>" method="post" hidden>
+            <?= csrf_field() ?>
+            <input type="hidden" name="delete_id" value="<?= h($post['id']) ?>">
+        </form>
+        <?php if ($sortable): ?>
+            <form id="move-up-<?= h($post['id']) ?>" method="post" hidden>
+                <?= csrf_field() ?>
+                <input type="hidden" name="move_id" value="<?= h($post['id']) ?>">
+                <input type="hidden" name="direction" value="up">
+                <input type="hidden" name="page" value="<?= h($page) ?>">
+            </form>
+            <form id="move-down-<?= h($post['id']) ?>" method="post" hidden>
+                <?= csrf_field() ?>
+                <input type="hidden" name="move_id" value="<?= h($post['id']) ?>">
+                <input type="hidden" name="direction" value="down">
+                <input type="hidden" name="page" value="<?= h($page) ?>">
+            </form>
+        <?php endif; ?>
+    <?php endforeach; ?>
+
     <?php if ($total_pages > 1): ?>
         <?php
-            $qs   = ($view === 'trash' ? 'view=trash&' : '') . ($q !== '' ? 'q=' . urlencode($q) . '&' : '');
+            $qs   = $q !== '' ? 'q=' . urlencode($q) . '&' : '';
             $base = SITE_URL . '/admin/index.php';
+            // ページ数が多いとき用に、現在ページの前後2つだけ出す
+            $from = max(1, $page - 2);
+            $to   = min($total_pages, $page + 2);
         ?>
         <div class="pagination">
             <?php if ($page > 1): ?>
@@ -292,19 +293,35 @@ admin_header($view === 'trash' ? 'ゴミ箱' : '記事一覧');
             <?php else: ?>
                 <span class="disabled">← 前</span>
             <?php endif; ?>
-            <?php for ($p = 1; $p <= $total_pages; $p++): ?>
+
+            <?php if ($from > 1): ?>
+                <a href="<?= $base ?>?<?= $qs ?>page=1">1</a>
+                <?php if ($from > 2): ?><span class="disabled">…</span><?php endif; ?>
+            <?php endif; ?>
+
+            <?php for ($p = $from; $p <= $to; $p++): ?>
                 <?php if ($p === $page): ?>
                     <span class="current"><?= $p ?></span>
                 <?php else: ?>
                     <a href="<?= $base ?>?<?= $qs ?>page=<?= $p ?>"><?= $p ?></a>
                 <?php endif; ?>
             <?php endfor; ?>
+
+            <?php if ($to < $total_pages): ?>
+                <?php if ($to < $total_pages - 1): ?><span class="disabled">…</span><?php endif; ?>
+                <a href="<?= $base ?>?<?= $qs ?>page=<?= $total_pages ?>"><?= $total_pages ?></a>
+            <?php endif; ?>
+
             <?php if ($page < $total_pages): ?>
                 <a href="<?= $base ?>?<?= $qs ?>page=<?= $page + 1 ?>">次 →</a>
             <?php else: ?>
                 <span class="disabled">次 →</span>
             <?php endif; ?>
         </div>
+    <?php endif; ?>
+
+    <?php if (!$sortable): ?>
+        <p class="hint-note">※ 検索中は並び替えできません。「クリア」を押すと ↑↓ が使えます。</p>
     <?php endif; ?>
 <?php endif; ?>
 
@@ -317,8 +334,7 @@ admin_footer(<<<'HTML'
     const counter  = document.getElementById('selected-count');
 
     function updateCount() {
-        const n = [...checks].filter(c => c.checked).length;
-        if (counter) counter.textContent = n;
+        if (counter) counter.textContent = [...checks].filter(c => c.checked).length;
     }
 
     if (checkAll) {
@@ -332,23 +348,16 @@ admin_footer(<<<'HTML'
 })();
 
 function confirmBulk(form) {
-    const action = form.bulk_action.value;
-    if (!action) {
+    if (!form.bulk_action.value) {
         alert('操作を選択してください。');
         return false;
     }
     const checked = form.querySelectorAll('.row-check:checked').length;
     if (checked === 0) {
-        alert('対象の記事を選択してください。');
+        alert('対象の作品を選択してください。');
         return false;
     }
-    if (action === 'purge') {
-        return confirm('選択した ' + checked + ' 件を完全に削除しますか？この操作は元に戻せません。');
-    }
-    if (action === 'delete') {
-        return confirm('選択した ' + checked + ' 件をゴミ箱に移動しますか？');
-    }
-    return true;
+    return confirm('選択した ' + checked + ' 件を削除しますか？\n本文セクションとサムネイル画像も削除され、元に戻せません。');
 }
 </script>
 HTML);
