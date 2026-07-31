@@ -145,7 +145,8 @@ cp config.example.php config.php   # 設定ファイルも作り直す
 ```
 takoyaki-cms/
 ├── README.md / CHANGELOG.md / EMBEDDING.md / TESTING.md
-├── config.example.php   # 設定ファイルのテンプレート
+├── config.example.php   # 設定ファイルのテンプレート（環境ごとの値だけ）
+├── functions.php        # 共通ヘルパー（DB接続・記事取得など。編集不要）
 ├── schema.sql           # DBスキーマ（新規インストール用）
 ├── migrations/          # バージョンアップ用SQL
 ├── setup.php            # 管理者初回登録（使用後に削除）
@@ -211,6 +212,8 @@ takoyaki-cms/
 ### ヘルパー関数
 
 `config.php` を読み込むと次のヘルパーが使えます（公開中の作品のみが返ります）。
+関数の実体は `functions.php` にありますが、`config.php` が末尾で読み込むので、
+呼び出し側は `config.php` だけを `require` すれば大丈夫です。
 
 ```php
 require_once 'config.php';

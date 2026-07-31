@@ -32,4 +32,5 @@ if ($result['error'] !== null) {
     exit;
 }
 
-echo json_encode(['url' => UPLOAD_URL . $result['filename']]);
+$upload_url = defined('UPLOAD_URL') ? UPLOAD_URL : $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['HTTP_HOST'] . '/uploads/';
+echo json_encode(['url' => $upload_url . $result['filename']]);

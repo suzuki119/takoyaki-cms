@@ -7,6 +7,18 @@
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **`config.php` を設定値と共通ヘルパーに分割** — DB接続・記事取得などの関数を
+  新設の `functions.php` へ移動し、`config.php` は環境ごとに変わる値
+  （DB接続情報 / `SITE_URL` / アップロード設定 / タイムゾーン / `SKILL_CATEGORIES`）だけになった（42行）。
+  `config.php` の末尾で `functions.php` を読み込むので、**各ページの `require_once 'config.php'`
+  はそのままで動く**。CMSを更新する際に `functions.php` は上書きしてよく、
+  `config.php` は触らなくて済む。
+
+---
+
 ## [2.0.0] - 2026-07-28
 
 汎用CMSから **ポートフォリオCMS**（Works + Skills）へ方針転換した大型リリース。
@@ -71,6 +83,10 @@
 - **カテゴリの slug に採番IDが入り、意味のあるURLを作れなかった問題**
 - **slug が重複すると保存できなかった問題** — `-2` / `-3` を自動付与するようにした。
   日本語のみのタイトルは `work-{id}` にフォールバックする
+- **数字だけの slug が ID 検索と衝突する問題** — `ブログ2` のような名前だと slug が `2` になり、
+  `get_category()` / `get_post()` の `is_numeric()` 判定で**別のレコードが引かれていた**。
+  `unique_slug()` が数字だけの候補を代替名にフォールバックするようにした
+  （作品・カテゴリ・タグの3つで共通）
 - **タイムゾーン未設定で予約公開の判定がずれる問題** — `date_default_timezone_set()` と
   PDO接続時の `SET time_zone` を追加し、PHP と MySQL の判定基準をそろえた
 - **`published_at` が未検証のまま SQL に渡っていた問題** — `parse_datetime_local()` で検証

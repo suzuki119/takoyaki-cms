@@ -37,8 +37,8 @@ site_head($post['title'], (string)($post['excerpt'] ?? ''));
     <?php if ($embed): ?>
         <div class="video">
             <iframe src="<?= h($embed) ?>" title="<?= h($post['title']) ?>"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowfullscreen loading="lazy"></iframe>
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen loading="lazy"></iframe>
         </div>
     <?php elseif (!empty($post['thumbnail'])): ?>
         <img class="single-thumb" src="<?= h(upload_url($post['thumbnail'])) ?>" alt="">
@@ -46,10 +46,12 @@ site_head($post['title'], (string)($post['excerpt'] ?? ''));
 
     <dl class="single-meta">
         <?php if (!empty($post['period'])): ?>
-            <dt>制作期間</dt><dd><?= h($post['period']) ?></dd>
+            <dt>制作期間</dt>
+            <dd><?= h($post['period']) ?></dd>
         <?php endif; ?>
         <?php if (!empty($post['type'])): ?>
-            <dt>種別</dt><dd><?= h($post['type']) ?></dd>
+            <dt>種別</dt>
+            <dd><?= h($post['type']) ?></dd>
         <?php endif; ?>
         <?php if (!empty($categories)): ?>
             <dt>カテゴリ</dt>
@@ -81,9 +83,9 @@ site_head($post['title'], (string)($post['excerpt'] ?? ''));
                 <h2><?= h($section['title']) ?></h2>
             <?php endif; ?>
             <?php
-                // 本文は CKEditor が出力した HTML をそのまま表示する。
-                // 書き手＝管理者自身なので信頼する前提。
-                echo $section['body'] ?? '';
+            // 本文は CKEditor が出力した HTML をそのまま表示する。
+            // 書き手＝管理者自身なので信頼する前提。
+            echo $section['body'] ?? '';
             ?>
         </section>
     <?php endforeach; ?>
