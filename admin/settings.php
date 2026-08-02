@@ -18,7 +18,7 @@ $editable_keys = [
     'site_description' => [
         'label' => 'サイト説明',
         'type'  => 'text',
-        'hint'  => '<meta name="description"> に使います',
+        'hint'  => '<meta name="description"> とサイトの説明に使います',
     ],
     'footer_text' => [
         'label' => 'フッターテキスト',

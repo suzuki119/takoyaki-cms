@@ -2,8 +2,10 @@
 config.php
 
 # アップロード画像（個別環境のデータ）
+# .htaccess は uploads/ での PHP 実行を止める防御なので、必ず配布物に含める
 uploads/*
 !uploads/.gitkeep
+!uploads/.htaccess
 
 # OS / エディタ
 .DS_Store

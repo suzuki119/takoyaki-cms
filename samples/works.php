@@ -39,6 +39,10 @@ $page_title = $category ? $category['name'] : 'Works';
 site_head($page_title);
 ?>
 
+<div class="description">
+    <p><?php echo h(get_setting('site_description', '作品の一覧を表示します。')); ?></p>
+</div>
+
 <div class="page-hero">
     <h1>Works</h1>
     <?php if ($category): ?>
@@ -51,7 +55,7 @@ site_head($page_title);
         <a class="filter-btn <?= $category ? '' : 'is-active' ?>" href="<?= h(SITE_URL) ?>/samples/works.php">All</a>
         <?php foreach ($categories as $c): ?>
             <a class="filter-btn <?= ($category && (int)$category['id'] === (int)$c['id']) ? 'is-active' : '' ?>"
-               href="<?= h(SITE_URL) ?>/samples/works.php?category=<?= h(rawurlencode($c['slug'])) ?>">
+                href="<?= h(SITE_URL) ?>/samples/works.php?category=<?= h(rawurlencode($c['slug'])) ?>">
                 <?= h($c['name']) ?>
             </a>
         <?php endforeach; ?>

@@ -1,0 +1,41 @@
+# ===================================================
+#  uploads/ での PHP 実行を禁止する（多層防御）
+#
+#  アップロード時に拡張子とMIMEを検証しているため、通常この設定が
+#  効く場面は無い。検証をすり抜けた場合の最後の砦として置いている。
+# ===================================================
+
+#  【500エラーが出たら】
+#  共有レンタルサーバでは .htaccess で使える命令が制限されていることがある。
+#  uploads/ 配下だけ 500 になる場合は、下の Options 行を # でコメントアウトして切り分ける。
+# ===================================================
+
+# mod_php 環境
+# ※ php_flag は CGI/FastCGI 版 PHP では使えず 500 になるため、必ず IfModule で囲む
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag engine off
+</IfModule>
+
+# PHP-FPM / CGI 環境ではハンドラごと外す
+<IfModule mod_mime.c>
+    RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phps .pht .phar
+    RemoveType    .php .phtml .php3 .php4 .php5 .php7 .php8 .phps .pht .phar
+    AddType text/plain .php .phtml .php3 .php4 .php5 .php7 .php8 .phps .pht .phar
+</IfModule>
+
+# ディレクトリ一覧を出さない
+Options -Indexes
+
+# 画像以外は配信しない
+# ※ Require は Apache 2.4 の命令。2.2 系では 500 になるので IfModule で囲む
+<IfModule mod_authz_core.c>
+    <FilesMatch "(?i)\.(jpe?g|png|gif|webp|svg)$">
+        Require all granted
+    </FilesMatch>
+</IfModule>
