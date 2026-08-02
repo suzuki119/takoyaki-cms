@@ -18,10 +18,10 @@ function admin_header(string $title, string $extra_head = ''): void
 {
     $site_url = defined('SITE_URL') ? SITE_URL : '';
 
-    // 「サイトを表示」のリンク先（設定で上書き可能、未設定なら samples/works.php）
+    // 「サイトを表示」のリンク先（設定で上書き可能、未設定なら公開トップ）
     $public_url = function_exists('get_setting') ? (string)get_setting('public_site_url', '') : '';
     if ($public_url === '') {
-        $public_url = $site_url . '/samples/works.php';
+        $public_url = $site_url . '/';
     }
 
     // 現在のページをナビでハイライトするための判定材料

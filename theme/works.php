@@ -1,9 +1,7 @@
 <?php
 // ===================================================
-//  サンプル: 作品一覧（Works）
-//  URL例: works.php            すべて
-//         works.php?category=web   カテゴリで絞り込み
-//         works.php?page=2         ページ送り
+//  テーマ: 作品一覧（Works）
+//  入り口は ルートの index.php （URL例: / , /?category=web , /?page=2）
 // ===================================================
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/_layout.php';
@@ -52,10 +50,10 @@ site_head($page_title);
 
 <?php if (!empty($categories)): ?>
     <nav class="filter">
-        <a class="filter-btn <?= $category ? '' : 'is-active' ?>" href="<?= h(SITE_URL) ?>/samples/works.php">All</a>
+        <a class="filter-btn <?= $category ? '' : 'is-active' ?>" href="<?= h(SITE_URL) ?>/">All</a>
         <?php foreach ($categories as $c): ?>
             <a class="filter-btn <?= ($category && (int)$category['id'] === (int)$c['id']) ? 'is-active' : '' ?>"
-                href="<?= h(SITE_URL) ?>/samples/works.php?category=<?= h(rawurlencode($c['slug'])) ?>">
+                href="<?= h(SITE_URL) ?>/?category=<?= h(rawurlencode($c['slug'])) ?>">
                 <?= h($c['name']) ?>
             </a>
         <?php endforeach; ?>
@@ -104,7 +102,7 @@ site_head($page_title);
                 <?php if ($p === $page): ?>
                     <span class="current"><?= $p ?></span>
                 <?php else: ?>
-                    <a href="<?= h(SITE_URL) ?>/samples/works.php?<?= $qs ?>page=<?= $p ?>"><?= $p ?></a>
+                    <a href="<?= h(SITE_URL) ?>/?<?= $qs ?>page=<?= $p ?>"><?= $p ?></a>
                 <?php endif; ?>
             <?php endfor; ?>
         </nav>

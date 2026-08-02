@@ -1,7 +1,7 @@
 <?php
 // ===================================================
-//  サンプル: 作品詳細
-//  URL例: single.php?slug=my-work  または  single.php?id=1
+//  テーマ: 作品詳細
+//  入り口は ルートの single.php （URL例: /single.php?slug=my-work , /single.php?id=1）
 // ===================================================
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/_layout.php';
@@ -57,7 +57,7 @@ site_head($post['title'], (string)($post['excerpt'] ?? ''));
             <dt>カテゴリ</dt>
             <dd class="chips">
                 <?php foreach ($categories as $c): ?>
-                    <a href="<?= h(SITE_URL) ?>/samples/works.php?category=<?= h(rawurlencode($c['slug'])) ?>"><?= h($c['name']) ?></a>
+                    <a href="<?= h(SITE_URL) ?>/?category=<?= h(rawurlencode($c['slug'])) ?>"><?= h($c['name']) ?></a>
                 <?php endforeach; ?>
             </dd>
         <?php endif; ?>
@@ -91,7 +91,7 @@ site_head($post['title'], (string)($post['excerpt'] ?? ''));
     <?php endforeach; ?>
 
     <p class="single-back">
-        <a href="<?= h(SITE_URL) ?>/samples/works.php">← 作品一覧へ</a>
+        <a href="<?= h(SITE_URL) ?>/">← 作品一覧へ</a>
     </p>
 
 </article>

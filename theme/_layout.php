@@ -1,6 +1,6 @@
 <?php
 // ===================================================
-//  公開ページ サンプルの共通レイアウト
+//  公開ページ（テーマ）の共通レイアウト
 //
 //  このファイルは「そのまま動くお手本」です。
 //  自分のサイトに組み込むときは、ここを既存サイトの
@@ -28,16 +28,16 @@ function site_head(string $title = '', string $description = ''): void
     <?php if ($desc !== ''): ?>
         <meta name="description" content="<?= h($desc) ?>">
     <?php endif; ?>
-    <link rel="stylesheet" href="<?= h(SITE_URL) ?>/samples/style.css">
+    <link rel="stylesheet" href="<?= h(THEME_URL) ?>/style.css">
 </head>
 <body>
 
 <header class="site-header">
     <div class="container site-header-inner">
-        <a class="site-brand" href="<?= h(SITE_URL) ?>/samples/works.php"><?= h($site_name) ?></a>
+        <a class="site-brand" href="<?= h(SITE_URL) ?>/"><?= h($site_name) ?></a>
         <nav class="site-nav">
-            <a href="<?= h(SITE_URL) ?>/samples/works.php">Works</a>
-            <a href="<?= h(SITE_URL) ?>/samples/skill.php">Skills</a>
+            <a href="<?= h(SITE_URL) ?>/">Works</a>
+            <a href="<?= h(SITE_URL) ?>/skill.php">Skills</a>
         </nav>
     </div>
 </header>

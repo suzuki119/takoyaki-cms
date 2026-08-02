@@ -13,7 +13,7 @@ $editable_keys = [
     'site_name' => [
         'label' => 'サイト名',
         'type'  => 'text',
-        'hint'  => 'samples/ のテンプレートで <title> などに使います',
+        'hint'  => 'theme/ のテンプレートで <title> などに使います',
     ],
     'site_description' => [
         'label' => 'サイト説明',
@@ -28,17 +28,17 @@ $editable_keys = [
     'posts_per_page' => [
         'label' => '作品一覧の表示件数',
         'type'  => 'number',
-        'hint'  => 'samples/works.php で1ページに表示する作品数',
+        'hint'  => '公開トップ（作品一覧）で1ページに表示する作品数',
     ],
     'public_site_url' => [
         'label' => '公開サイトのURL',
         'type'  => 'text',
-        'hint'  => '管理画面の「サイトを表示」の飛び先。空なら samples/works.php へ。既存サイトに組み込んでいる場合はそのURLを入れてください',
+        'hint'  => '管理画面の「サイトを表示」の飛び先。空なら公開トップへ。既存サイトに組み込んでいる場合はそのURLを入れてください',
     ],
     'public_article_url_pattern' => [
         'label' => '公開作品URLのパターン',
         'type'  => 'text',
-        'hint'  => '一覧・編集画面の「公開ページ ↗」の形式。例: https://your-site.com/works/{slug} ／ {slug} と {id} が使えます。空なら samples/single.php へ',
+        'hint'  => '一覧・編集画面の「公開ページ ↗」の形式。例: https://your-site.com/works/{slug} ／ {slug} と {id} が使えます。空なら /single.php?slug=... へ',
     ],
 ];
 

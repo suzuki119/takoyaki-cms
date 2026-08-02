@@ -26,6 +26,14 @@ define('SITE_URL', 'http://localhost:8888/takoyaki-cms');
 define('UPLOAD_DIR', __DIR__ . '/uploads/');
 define('UPLOAD_URL', SITE_URL . '/uploads/');
 
+// --- 公開ページ（テーマ）---
+// テンプレート一式を置くフォルダ名。フォルダ名を変えたらここだけ直せばよい。
+// 公開URLには出てこない（ルートの index.php / single.php / skill.php が窓口になる）。
+// CSSや画像を読むときだけ THEME_URL を使う。
+define('THEME_NAME', 'theme');
+define('THEME_DIR',  __DIR__ . '/' . THEME_NAME);   // サーバ上のパス
+define('THEME_URL',  SITE_URL . '/' . THEME_NAME);  // ブラウザから見たURL
+
 // --- 画像アップロード設定 ---
 define('MAX_UPLOAD_SIZE',   5 * 1024 * 1024); // 5MB
 define('IMAGE_MAX_WIDTH',   1600);            // 元画像の最大幅（超えるとリサイズ）

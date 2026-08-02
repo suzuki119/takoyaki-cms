@@ -530,16 +530,16 @@ function is_post_live(array $post): bool
 /**
  * 作品の「公開ページURL」を組み立てる。
  *  - site_settings の public_article_url_pattern があれば {slug} / {id} を置換
- *  - 未設定なら samples/single.php?slug=... もしくは ?id=...
+ *  - 未設定なら single.php?slug=... もしくは ?id=...
  */
 function public_post_url(array $post): string
 {
     $pattern = (string)get_setting('public_article_url_pattern', '');
     if ($pattern === '') {
         if (!empty($post['slug'])) {
-            return SITE_URL . '/samples/single.php?slug=' . urlencode((string)$post['slug']);
+            return SITE_URL . '/single.php?slug=' . urlencode((string)$post['slug']);
         }
-        return SITE_URL . '/samples/single.php?id=' . (int)$post['id'];
+        return SITE_URL . '/single.php?id=' . (int)$post['id'];
     }
     return strtr($pattern, [
         '{slug}' => urlencode((string)($post['slug'] ?? '')),
